@@ -1,3 +1,9 @@
+or getting bounding box and rendering iconlayer like github with filtered data and grabbing only necsary images
+
+
+try composite route with tilelayer perhaps?
+https://github.com/jeffpeck10x/deckgl-tilelayer-issue/blob/master/app.js
+
 # Svelte Starter
 
 This [starter template](https://github.com/the-pudding/svelte-starter) aims to quickly scaffold a [SvelteKit](https://kit.svelte.dev/) project, designed around data-driven, visual stories at [The Pudding](https://pudding.cool).
