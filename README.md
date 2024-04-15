@@ -1,5 +1,5 @@
-or getting bounding box and rendering iconlayer like github with filtered data and grabbing only necsary images
-
+try getting tilelayer working and see if get same issues with texture black box.
+then get higher res imagery -> proof of concept, then work on performance
 
 try composite route with tilelayer perhaps?
 https://github.com/jeffpeck10x/deckgl-tilelayer-issue/blob/master/app.js
