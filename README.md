@@ -1,8 +1,23 @@
-try getting tilelayer working and see if get same issues with texture black box.
-then get higher res imagery -> proof of concept, then work on performance
+IMAGE ATTRIBUTES
+- load lat/long
+- color identification
 
-try composite route with tilelayer perhaps?
-https://github.com/jeffpeck10x/deckgl-tilelayer-issue/blob/master/app.js
+IMAGE QUALITY
+- higher-res image finder (use image size from different services, or pixelate calculate)
+
+ANIMATIONS
+
+SORTING
+- by color
+
+SEARCH/FILTER
+- by location
+
+LIKE
+
+COMMENT
+
+
 
 # Svelte Starter
 

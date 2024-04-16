@@ -42,6 +42,9 @@
 	"dependencies": {
 		"@deck.gl/core": "^9.0.1",
 		"@deck.gl/geo-layers": "^9.0.3",
-		"@deck.gl/layers": "^9.0.1"
+		"@deck.gl/layers": "^9.0.1",
+		"@loaders.gl/core": "^4.2.0",
+		"@loaders.gl/textures": "^4.2.0",
+		"@luma.gl/core": "^9.0.11"
 	}
 }
