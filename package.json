@@ -15,6 +15,7 @@
 		"@sveltejs/adapter-static": "^3.0.1",
 		"@sveltejs/kit": "^2.5.4",
 		"@sveltejs/vite-plugin-svelte": "3.0.2",
+		"@turf/turf": "^6.5.0",
 		"archieml": "^0.5.0",
 		"autoprefixer": "^10.4.18",
 		"bits-ui": "^0.19.7",
@@ -40,11 +41,12 @@
 	},
 	"browserslist": "> 0.5%, last 4 versions, not ie <= 11, not ie_mob <= 11",
 	"dependencies": {
-		"@deck.gl/core": "^9.0.1",
-		"@deck.gl/geo-layers": "^9.0.3",
-		"@deck.gl/layers": "^9.0.1",
-		"@loaders.gl/core": "^4.2.0",
-		"@loaders.gl/textures": "^4.2.0",
-		"@luma.gl/core": "^9.0.11"
+		"@loaders.gl/core": "^3.2.0",
+		"@loaders.gl/textures": "^3.2.0",
+		"@mapbox/mapbox-gl-geocoder": "^5.0.2",
+		"@mapbox/search-js-web": "^1.0.0-beta.19",
+		"@turf/helpers": "^6.5.0",
+		"@turf/points-within-polygon": "^6.5.0",
+		"deck.gl": "^8.7.0"
 	}
 }

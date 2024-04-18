@@ -4,13 +4,18 @@
 	import Demo from "$components/demo/Demo.svelte";
 	import WIP from "$components/helpers/WIP.svelte";
 	import sprite from "$data/sprite-data_128.csv"
-	
+	import {registerLoaders} from '@loaders.gl/core';
+	import filterLocation from '$actions/filterAddresses.js'
+
 	import {BasisLoader} from '@loaders.gl/textures';
 	import {load} from '@loaders.gl/core';
 	import {Deck, OrthographicView, COORDINATE_SYSTEM} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer} from '@deck.gl/layers';
-	import {TileLayer} from '@deck.gl/geo-layers';
-	import Dice_3 from "lucide-svelte/icons/dice-3";
+
+	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
+	import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
+
+
 
 	function shuffle(a) {
 		var j, x, i;
@@ -26,6 +31,7 @@
 	let zoom;
 	let deckgl;
 	let bounds;
+	let inputBox;
 	// $: bounds ? renderLayers() : null;
 
 	let width = 128;//2304;//128;
@@ -151,13 +157,52 @@
 	}
 
 	onMount(async () => {
+
+		const geocoder = new MapboxGeocoder({
+			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2xqc2g3N2o5MHAyMDNjdGhzM2V2cmR3NiJ9.3x1ManoY4deDkAGBuUMnSw',
+			options: {
+				marker: false
+			}
+		});
+		geocoder.addTo(inputBox)
+		// console.log(inputBox)
+
+		// inputBox.appendChild("#geocoder");
+
+		geocoder.on('result', e => {
+    		sortImages(e);
+		});
+
+        // const module = await import('@mapbox/search-js-web');
+        // let autofill = module["autofill"];
+
+		// let searchBox = autofill({
+    	// 	accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2xqc2g3N2o5MHAyMDNjdGhzM2V2cmR3NiJ9.3x1ManoY4deDkAGBuUMnSw'
+		// })
+
+		// searchBox.addEventListener('suggest', (event) => {
+  		// 	const featureCollection = event.detail;
+		// 	console.log(featureCollection)
+		// 	console.log("suggesting")
+		// });
+
+		// searchBox.addEventListener('retrieve', (event) => {
+  		// 	const featureCollection = event.detail;
+		// 	console.log("retrieving")
+		// });
+
+		filterLocation();
 		// let image;
+		registerLoaders(BasisLoader);
+		
 		const loadOptions = {basis: {}};
+		const result = await load('assets/kodim03.basis', BasisLoader, loadOptions);
+		const image = result[0];
 
-		const result = await load('assets/test5.basis', BasisLoader, loadOptions);
-		const image = result[0][0];
 
+		console.log(BasisLoader)
 		console.log("making deck",el)
+		
 		deckgl = new Deck({
 			parent: el,
 			views: new OrthographicView(),
@@ -173,11 +218,14 @@
 			controller: true,
 			layers: [
 				// new BitmapLayer({
-				// 	//data: null,
-				// 	image: 'assets/test5.basis',
+				// 	// image: 'assets/test.basis',
+				// 	// image: 'assets/demo/test.jpg',
+				// 	// image: 'assets/kodim03.basis',
+				// 	image: image,
 				// 	loaders: [BasisLoader],
+				// 	// loadOptions: {mipmap: false},
 				// 	id: `_bitmap`,
-				// 	bounds: [0,5,5,0]//[0,5,5,0]
+				// 	// bounds: [0,5,5,0]//[0,5,5,0]
 				// }),
 			
 
@@ -188,12 +236,11 @@
 			// 	getIcon: d => d.id,
 			// 	getPosition: d => d.coordinates,
 			// 	getSize: 5,
-			// 	iconAtlas: image.data,
-
+			// 	iconAtlas: 'assets/kodim03.basis',
+			// 	loaders: [BasisLoader],
 			// 	// iconAtlas: 'assets/spritesheet_128.jpeg',
 			// 	iconMapping: spriteObject,
 			// 	sizeUnits: 'common',
-			// 	loaders: [BasisLoader]
 			// }),
 
 			// // WORKING ICON LAYER
@@ -322,12 +369,16 @@
 
 	})
 
-	function sortImages(){
+	function sortImages(locationData){
+		
 
-        console.log("hiiii")
+        let ids = filterLocation(sprite,locationData,"bbox");
+		console.log(ids)
+		let data = sprite;
 
-        let data = shuffle(sprite);
-
+		data = data.filter(d => {
+			return ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1; //new_1007.jpg
+		}) 
         let squareSize = Math.floor(Math.sqrt(data.length));
 
         data = data.map((d,i) => {
@@ -353,9 +404,12 @@
 	}
 
 </script>
+<!-- <svelte:component this={autofill} /> -->
 
 <div class="overlay">
-	<button on:click={() => sortImages()}>sort</button>
+	<div bind:this={inputBox} id="geocoder" class="geocoder">
+	</div>
+
 </div>
 
 <div class="el" bind:this={el}>

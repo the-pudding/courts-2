@@ -34,7 +34,7 @@
 	<meta name="robots" content="max-image-preview:large" />
 
 	<link rel="canonical" href="{url}/" />
-
+	<link href="https://api.mapbox.com/mapbox-assembly/v1.3.0/assembly.min.css" rel="stylesheet">
 	{#each preloadFont as href}
 		<link rel="preload" {href} as="font" type="font/woff2" crossorigin />
 	{/each}
