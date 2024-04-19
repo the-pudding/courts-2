@@ -14,6 +14,7 @@
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 	import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
+	import SortTable from "./helpers/SortTable.svelte";
 
 
 
@@ -173,6 +174,7 @@
     		sortImages(e);
 		});
 
+
         // const module = await import('@mapbox/search-js-web');
         // let autofill = module["autofill"];
 
@@ -252,7 +254,12 @@
 				getSize: 5,
 				iconAtlas: 'assets/spritesheet_128.jpeg',
 				iconMapping: spriteObject,
-				sizeUnits: 'common'
+				sizeUnits: 'common',
+				transitions: {
+					getPosition: {
+						duration: 300,
+					}
+				}
 			}),
 
 
@@ -373,18 +380,33 @@
 		
 
         let ids = filterLocation(sprite,locationData,"bbox");
-		console.log(ids)
 		let data = sprite;
 
-		data = data.filter(d => {
-			return ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1; //new_1007.jpg
-		}) 
-        let squareSize = Math.floor(Math.sqrt(data.length));
+		// data = data.filter(d => {
+		// 	return ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1; //new_1007.jpg
+		// }) 
+        let squareSize = Math.floor(Math.sqrt(ids.length));
+		let count = -1;
 
         data = data.map((d,i) => {
-            let x = (i % squareSize) * 5 + (i % squareSize)*.1// + Math.random()*1;
-            let y = Math.floor(i/squareSize) * 5 + Math.floor(i/squareSize)*1*.1// + Math.random() * 1;
-            return {"coordinates":[x,y], id:d.id.replace(".jpg","")}
+			let visible = 5;
+			if(ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1){
+				visible = 0;
+				count = count + 1;
+				let x = (count % squareSize) * 5 + (count % squareSize)*.1// + Math.random()*1;
+				let y = Math.floor(count/squareSize) * 5 + Math.floor(count/squareSize)*1*.1// + Math.random() * 1;
+				return {"coordinates":[x,y], id:d.id.replace(".jpg","")}
+
+			}
+			else {
+				return {"coordinates":[1000,1000], id:d.id.replace(".jpg","")}
+
+			}
+			// ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1; //new_1007.jpg
+
+            let x = (count % squareSize) * 5 + (count % squareSize)*.1 + 10// + Math.random()*1;
+            let y = Math.floor(count/squareSize) * 5 + Math.floor(count/squareSize)*1*.1 + 10// + Math.random() * 1;
+            return {"coordinates":[x,y], id:d.id.replace(".jpg",""),size:visible}
         });
 
 		deckgl.setProps({
@@ -394,11 +416,17 @@
 					data,
 					getIcon: d => d.id,
 					getPosition: d => d.coordinates,
-					getSize: 5,
+					// opacity: d => d.visible,
+					getSize: 5,//d => d.visible,
 					iconAtlas: 'assets/spritesheet_128.jpeg',
 					iconMapping: spriteObject,
-					sizeUnits: 'common'
-				}),
+					sizeUnits: 'common',
+					transitions: {
+						getPosition: {
+							duration: 300,
+						}
+					}
+				})
 			]
 		});
 	}
@@ -409,7 +437,7 @@
 <div class="overlay">
 	<div bind:this={inputBox} id="geocoder" class="geocoder">
 	</div>
-
+	<button on:click={() => sortImages()}>sort</button>
 </div>
 
 <div class="el" bind:this={el}>

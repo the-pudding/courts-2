@@ -5,13 +5,11 @@ IMAGE ATTRIBUTES
 IMAGE QUALITY
 - higher-res image finder (use image size from different services, or pixelate calculate)
 
-ANIMATIONS
-
 SORTING
 - by color
 
 SEARCH/FILTER
-- by location
+- Animated
 
 LIKE
 
