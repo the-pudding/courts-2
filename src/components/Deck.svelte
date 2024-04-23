@@ -1,20 +1,16 @@
 <script>
 	import { getContext, onMount } from "svelte";
 	import { range, sort } from "d3";
-	import Demo from "$components/demo/Demo.svelte";
-	import WIP from "$components/helpers/WIP.svelte";
-	import sprite from "$data/sprite-data_128.csv"
-	import {registerLoaders} from '@loaders.gl/core';
 	import filterLocation from '$actions/filterAddresses.js'
+	import courtData from "$data/court_data.csv"
 
-	import {BasisLoader} from '@loaders.gl/textures';
-	import {load} from '@loaders.gl/core';
 	import {Deck, OrthographicView, COORDINATE_SYSTEM} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer} from '@deck.gl/layers';
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 	import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
 	import SortTable from "./helpers/SortTable.svelte";
+	import { LucideAsterisk } from "lucide-svelte";
 
 
 
@@ -33,33 +29,103 @@
 	let deckgl;
 	let bounds;
 	let inputBox;
+	let spritePositionsMaster;
 	// $: bounds ? renderLayers() : null;
 
 	let width = 128;//2304;//128;
 	let height = 128;//2176;//128;
+	let spriteMap = {};
 
-	// let ICON_MAPPING = {
-	//   marker: {x: 0, y: 0, width: width, height: height, mask: false}
-	// };
-	let spriteMap = sprite.map(d => {
-		return {x:+d.x, y:+d.y, width:width, height: height, mask: false, id:d.id.replace(".jpg","").replace(".jpeg","")};
-	});
+	let states = ["mi","ny"];
+	let layerProps = [];
+	let layers = [];
 
-	const spriteObject = {};
 
-	for (let row of spriteMap) {
-		spriteObject[row.id] = row;
+	function makeMasterData(toFilter,data){
+		let spritePositionsMaster;
+
+		if(toFilter.length > 0){
+			spritePositionsMaster = data.filter(d => {
+				return toFilter.indexOf(d.id) > -1;
+			})
+		}
+		else {
+			spritePositionsMaster = data.map(d => d);
+		}
+
+		let squareSize = Math.floor(Math.sqrt(spritePositionsMaster.length));
+		spritePositionsMaster = data.map((d,i) => {
+			let x = (i % squareSize) * 5 + (i % squareSize)*.1// + Math.random()*1;
+			let y = Math.floor(i/squareSize) * 5 + Math.floor(i/squareSize)*1*.1// + Math.random() * 1;
+			return {"coordinates":[x,y], id:d.id.replace(".jpg",""), "geo": d.geo};
+		});
+		return spritePositionsMaster;
 	}
 
-	let data = shuffle(sprite);
+	async function makeSpriteObject(){
+		let test = {};
 
-	let squareSize = Math.floor(Math.sqrt(data.length));
+		for (let state of states){
+			let spriteMap = courtData.map(d => {
+				return {geo:d.geo, x:+d.x, y:+d.y, width:width, height: height, mask: false, id:d.id.replace(".jpg","").replace(".jpeg","")};
+			}).filter(d => {
+				return d.geo == state;
+			})
 
-	data = data.map((d,i) => {
-		let x = (i % squareSize) * 5 + (i % squareSize)*.1// + Math.random()*1;
-		let y = Math.floor(i/squareSize) * 5 + Math.floor(i/squareSize)*1*.1// + Math.random() * 1;
-		return {"coordinates":[x,y], id:d.id.replace(".jpg","")}
-	});
+			const spriteObject = {};
+
+			for (let row of spriteMap) {
+				spriteObject[row.id] = row;
+			}
+			test[state] = spriteObject
+			console.log(test)
+		}
+		return test;
+	}
+
+	async function makeIconLayersProps(){
+		for (let state of states){
+			let props = {
+				id: `IconLayer_${state}`,
+				getIcon: d => d.id,
+				getPosition: d => d.coordinates,
+				getSize: 5,
+				iconAtlas: `assets/spritesheet_128_${state}.jpeg`,
+				iconMapping: spriteMap[state],
+				sizeUnits: 'common',
+				transitions: {
+					getPosition: {
+						duration: 300,
+					}
+				}
+			};
+			layerProps.push(props);
+		}
+		return true;
+	}
+	
+	async function assignDataToIconLayers(){
+		for (let layer in layerProps){
+			let dataTobind = spritePositionsMaster.filter(d => d.geo == states[layer]);
+			layerProps[layer].data = dataTobind;
+		}
+		return true;
+	}
+
+	async function makeIconLayers(){
+		for (let layer in layerProps){
+			let iconLayer = new IconLayer({
+				...layerProps[layer]
+			})
+			layers.push(iconLayer)
+		}
+		return true;
+	}
+
+
+
+
+
 
 	// data = range(10000).map((d,i) => {
 	// 	let x = (i % 100) * 5 + (i % 100);
@@ -159,6 +225,14 @@
 
 	onMount(async () => {
 
+		spritePositionsMaster = await makeMasterData([],courtData);
+		// console.log("master",spritePositionsMaster)
+		spriteMap = await makeSpriteObject();
+		// console.log("spriteObject",spriteMap)
+		await makeIconLayersProps();
+		await assignDataToIconLayers()
+		await makeIconLayers();
+
 		const geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2xqc2g3N2o5MHAyMDNjdGhzM2V2cmR3NiJ9.3x1ManoY4deDkAGBuUMnSw',
 			options: {
@@ -174,37 +248,9 @@
     		sortImages(e);
 		});
 
-
-        // const module = await import('@mapbox/search-js-web');
-        // let autofill = module["autofill"];
-
-		// let searchBox = autofill({
-    	// 	accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2xqc2g3N2o5MHAyMDNjdGhzM2V2cmR3NiJ9.3x1ManoY4deDkAGBuUMnSw'
-		// })
-
-		// searchBox.addEventListener('suggest', (event) => {
-  		// 	const featureCollection = event.detail;
-		// 	console.log(featureCollection)
-		// 	console.log("suggesting")
-		// });
-
-		// searchBox.addEventListener('retrieve', (event) => {
-  		// 	const featureCollection = event.detail;
-		// 	console.log("retrieving")
-		// });
-
-		filterLocation();
-		// let image;
-		registerLoaders(BasisLoader);
-		
-		const loadOptions = {basis: {}};
-		const result = await load('assets/kodim03.basis', BasisLoader, loadOptions);
-		const image = result[0];
-
-
-		console.log(BasisLoader)
 		console.log("making deck",el)
 		
+
 		deckgl = new Deck({
 			parent: el,
 			views: new OrthographicView(),
@@ -218,16 +264,17 @@
 			// 	zoom = viewport.zoom;
   			// },
 			controller: true,
-			layers: [
+			layers: layers
+			//[
 				// new BitmapLayer({
-				// 	// image: 'assets/test.basis',
-				// 	// image: 'assets/demo/test.jpg',
+				// 	// image: 'assets/shannon-dxt1.ktx2',
+				// 	image: 'assets/demo/test.jpg',
 				// 	// image: 'assets/kodim03.basis',
-				// 	image: image,
-				// 	loaders: [BasisLoader],
+				// 	// image: texture,
+				// 	// loaders: [BasisLoader, CompressedTextureLoader],
 				// 	// loadOptions: {mipmap: false},
 				// 	id: `_bitmap`,
-				// 	// bounds: [0,5,5,0]//[0,5,5,0]
+				// 	bounds: [50,100,100,50]//[0,5,5,0]
 				// }),
 			
 
@@ -246,21 +293,6 @@
 			// }),
 
 			// // WORKING ICON LAYER
-			new IconLayer({
-				id: 'IconLayer',
-				data,
-				getIcon: d => d.id,
-				getPosition: d => d.coordinates,
-				getSize: 5,
-				iconAtlas: 'assets/spritesheet_128.jpeg',
-				iconMapping: spriteObject,
-				sizeUnits: 'common',
-				transitions: {
-					getPosition: {
-						duration: 300,
-					}
-				}
-			}),
 
 
 
@@ -371,63 +403,26 @@
 				// 		iconMapping: spriteObject,
 				// 		sizeUnits: 'common'
 				// })
-			]
+			//]
 		});
 
 	})
 
-	function sortImages(locationData){
+	async function sortImages(locationData){
 		
+		layers = [];
 
-        let ids = filterLocation(sprite,locationData,"bbox");
-		let data = sprite;
-
-		// data = data.filter(d => {
-		// 	return ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1; //new_1007.jpg
-		// }) 
+        let ids = filterLocation(courtData,locationData,"bbox");
+		console.log(ids)
         let squareSize = Math.floor(Math.sqrt(ids.length));
 		let count = -1;
-
-        data = data.map((d,i) => {
-			let visible = 5;
-			if(ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1){
-				visible = 0;
-				count = count + 1;
-				let x = (count % squareSize) * 5 + (count % squareSize)*.1// + Math.random()*1;
-				let y = Math.floor(count/squareSize) * 5 + Math.floor(count/squareSize)*1*.1// + Math.random() * 1;
-				return {"coordinates":[x,y], id:d.id.replace(".jpg","")}
-
-			}
-			else {
-				return {"coordinates":[1000,1000], id:d.id.replace(".jpg","")}
-
-			}
-			// ids.indexOf(+d.id.split("_")[1].split(".")[0]) > -1; //new_1007.jpg
-
-            let x = (count % squareSize) * 5 + (count % squareSize)*.1 + 10// + Math.random()*1;
-            let y = Math.floor(count/squareSize) * 5 + Math.floor(count/squareSize)*1*.1 + 10// + Math.random() * 1;
-            return {"coordinates":[x,y], id:d.id.replace(".jpg",""),size:visible}
-        });
+		
+		spritePositionsMaster = await makeMasterData(ids,courtData);
+		await assignDataToIconLayers()
+		await makeIconLayers();
 
 		deckgl.setProps({
-			layers: [
-				new IconLayer({
-					id: 'IconLayer',
-					data,
-					getIcon: d => d.id,
-					getPosition: d => d.coordinates,
-					// opacity: d => d.visible,
-					getSize: 5,//d => d.visible,
-					iconAtlas: 'assets/spritesheet_128.jpeg',
-					iconMapping: spriteObject,
-					sizeUnits: 'common',
-					transitions: {
-						getPosition: {
-							duration: 300,
-						}
-					}
-				})
-			]
+			layers: layers
 		});
 	}
 

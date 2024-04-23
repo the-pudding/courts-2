@@ -41,12 +41,14 @@
 	},
 	"browserslist": "> 0.5%, last 4 versions, not ie <= 11, not ie_mob <= 11",
 	"dependencies": {
-		"@loaders.gl/core": "^3.2.0",
-		"@loaders.gl/textures": "^3.2.0",
+		"@deck.gl/core": "^9.0.9",
+		"@deck.gl/layers": "^9.0.9",
+		"@loaders.gl/core": "^4.2.0-alpha.6",
+		"@loaders.gl/images": "^4.2.0-alpha.6",
+		"@loaders.gl/textures": "^4.2.0-alpha.6",
 		"@mapbox/mapbox-gl-geocoder": "^5.0.2",
 		"@mapbox/search-js-web": "^1.0.0-beta.19",
 		"@turf/helpers": "^6.5.0",
-		"@turf/points-within-polygon": "^6.5.0",
-		"deck.gl": "^8.7.0"
+		"@turf/points-within-polygon": "^6.5.0"
 	}
 }

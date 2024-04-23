@@ -3,6 +3,8 @@ IMAGE ATTRIBUTES
 - color identification
 
 IMAGE QUALITY
+- figure out the pixel size of low-res images and use that size rather than the 1000x1000
+- when re-sizing to 128 for low-res imagesx , figure out if that is ruining the image or if figma is better when resizing
 - higher-res image finder (use image size from different services, or pixelate calculate)
 
 SORTING

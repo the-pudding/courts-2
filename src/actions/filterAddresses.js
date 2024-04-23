@@ -1,11 +1,10 @@
 import { point, points, polygon, pointsWithinPolygon, bboxPolygon } from "@turf/turf";
-import courts from "$data/courts_positions.csv"
 
 // import { points } from "@turf/turf";
 
 // import { polygon, center, bearing, distance, point } from '@turf/turf';
 
-export default function filterLocation(data,location,filterType) {
+export default function filterLocation(courts,location,filterType) {
 
     if(filterType == "bbox"){
         console.log(location)
@@ -29,8 +28,12 @@ export default function filterLocation(data,location,filterType) {
         console.log(polygonToSearch)
 
         let ptsWithin = pointsWithinPolygon(pointArray, polygonToSearch).features.map(d => {
-            return +d.properties.id;
+            return d.properties.id;
         });
+
+        console.log(ptsWithin)
+
+
 
     
         
