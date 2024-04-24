@@ -2,6 +2,7 @@
 	import { getContext, onMount } from "svelte";
 	import { range, sort } from "d3";
 	import filterLocation from '$actions/filterAddresses.js'
+	import colorSort from "$actions/colorSort.js";
 	import courtData from "$data/court_data.csv"
 
 	import {Deck, OrthographicView, COORDINATE_SYSTEM} from '@deck.gl/core';
@@ -24,6 +25,7 @@
 		}
 		return a;
 	}
+
 	let el;
 	let zoom;
 	let deckgl;
@@ -54,7 +56,7 @@
 		}
 
 		let squareSize = Math.floor(Math.sqrt(spritePositionsMaster.length));
-		spritePositionsMaster = data.map((d,i) => {
+		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 			let x = (i % squareSize) * 5 + (i % squareSize)*.1// + Math.random()*1;
 			let y = Math.floor(i/squareSize) * 5 + Math.floor(i/squareSize)*1*.1// + Math.random() * 1;
 			return {"coordinates":[x,y], id:d.id.replace(".jpg",""), "geo": d.geo};
@@ -113,6 +115,7 @@
 	}
 
 	async function makeIconLayers(){
+		layers = [];
 		for (let layer in layerProps){
 			let iconLayer = new IconLayer({
 				...layerProps[layer]
@@ -226,9 +229,7 @@
 	onMount(async () => {
 
 		spritePositionsMaster = await makeMasterData([],courtData);
-		// console.log("master",spritePositionsMaster)
 		spriteMap = await makeSpriteObject();
-		// console.log("spriteObject",spriteMap)
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
 		await makeIconLayers();
@@ -410,14 +411,23 @@
 
 	async function sortImages(locationData){
 		
-		layers = [];
-
         let ids = filterLocation(courtData,locationData,"bbox");
-		console.log(ids)
-        let squareSize = Math.floor(Math.sqrt(ids.length));
-		let count = -1;
 		
 		spritePositionsMaster = await makeMasterData(ids,courtData);
+
+		await assignDataToIconLayers()
+		await makeIconLayers();
+
+		deckgl.setProps({
+			layers: layers
+		});
+	}
+
+
+	async function sortColor(){
+		let newData = colorSort(courtData);
+		spritePositionsMaster = await makeMasterData([],newData);
+
 		await assignDataToIconLayers()
 		await makeIconLayers();
 
@@ -432,7 +442,7 @@
 <div class="overlay">
 	<div bind:this={inputBox} id="geocoder" class="geocoder">
 	</div>
-	<button on:click={() => sortImages()}>sort</button>
+	<button on:click={() => sortColor(courtData)}>sort</button>
 </div>
 
 <div class="el" bind:this={el}>
