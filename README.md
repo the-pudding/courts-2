@@ -8,7 +8,7 @@ IMAGE QUALITY
 - higher-res image finder (use image size from different services, or pixelate calculate)
 
 SORTING
-- by color
+- move to maps lapse
 
 SEARCH/FILTER
 - Animated

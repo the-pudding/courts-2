@@ -7,11 +7,19 @@
 
 	import {Deck, OrthographicView, COORDINATE_SYSTEM} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer} from '@deck.gl/layers';
+	import {TileLayer} from '@deck.gl/geo-layers';
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 	import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
 	import SortTable from "./helpers/SortTable.svelte";
 	import { LucideAsterisk } from "lucide-svelte";
+
+	import {load} from '@loaders.gl/core';
+	
+	import {
+	BasisLoader,
+	} from '@loaders.gl/textures';
+
 
 
 
@@ -34,8 +42,8 @@
 	let spritePositionsMaster;
 	// $: bounds ? renderLayers() : null;
 
-	let width = 128;//2304;//128;
-	let height = 128;//2176;//128;
+	let width = 64;//2304;//128;
+	let height = 64;//2176;//128;
 	let spriteMap = {};
 
 	let states = ["mi","ny"];
@@ -212,8 +220,11 @@
 	async function getData(bbox, id) {
   	// Stall for 20ms - simulate an async request
   		// await new Promise(resolve => setTimeout(resolve, 100));
+		if(!courtData){
+			return [];
+		}
 
-		let highResData = data
+		let highResData = spritePositionsMaster
 			.filter(d => {
 				let x = d.coordinates[0];
 				let y = d.coordinates[1];
@@ -222,8 +233,9 @@
 				}
 			})
 
-		return highResData
+		// console.log(highResData)
 
+		return highResData
 	}
 
 	onMount(async () => {
@@ -232,7 +244,10 @@
 		spriteMap = await makeSpriteObject();
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
-		await makeIconLayers();
+		// await makeIconLayers();
+
+		layers = [];
+
 
 		const geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2xqc2g3N2o5MHAyMDNjdGhzM2V2cmR3NiJ9.3x1ManoY4deDkAGBuUMnSw',
@@ -249,31 +264,118 @@
     		sortImages(e);
 		});
 
-		console.log("making deck",el)
-		
+		// result = loader && (await load(arrayBuffer, loader, options));
+		let options = {
+			'basis': {
+				format: "astc-4x4"
+			},
+			'compressed-texture': {useBasis: true}
+		}
+
+		const result = await load('assets/mi_64.basis', BasisLoader, options);
+		const image = result[0];
+		let texture = {
+			data: image,
+			width: 3264,
+			height: 3200,
+			compressed: true,
+			mipmaps: false,
+    	}
+
+		layerProps[0].iconAtlas = texture;
+
+		const resultNy = await load('assets/ny_64.basis', BasisLoader, options);
+		const imageNy = resultNy[0];
+		let textureNy = {
+			data: imageNy,
+			width: 4224,
+			height: 4160,
+			compressed: true,
+			mipmaps: false,
+    	}
+
+		layerProps[1].iconAtlas = textureNy;
+
+
+
+		for (let layer in layerProps){
+			let iconLayer = new IconLayer({
+				...layerProps[layer]
+			})
+			layers.push(iconLayer)
+		}
+
+		// layers.push(test)
+
+		let tileLayer = new TileLayer({
+			tileSize: 512,
+			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+			getTileData: async ({id, bbox}) => {
+				if(zoom < 5){
+					return null;
+				}
+				return getData(bbox, id);
+			},
+			renderSubLayers: props => {
+
+				const {
+					bbox: {left, bottom, right, top}
+				} = props.tile;
+
+				let layers = [
+				]
+
+				if(props.data && props.data.length > 0){
+
+					for (let image in props.data){
+
+						let imageId = props.data[image].id;
+						let imageCoors = props.data[image].coordinates;
+						// let imageCoorsFinal = [imageCoors[0],imageCoors[1],imageCoors[0],imageCoors[1]];
+						let imageCoorsFinal = [imageCoors[0]-2.5,imageCoors[1]+5-2.5,imageCoors[0]+5-2.5,imageCoors[1]-2.5];
+
+						let item = new BitmapLayer(props,{
+							image: `assets/full/google_${imageId.replace("/","_")}.jpeg`,
+							id: `${props.id}_${imageId}_bitmap`,
+							bounds: imageCoorsFinal,//[0,5,5,0]
+							visible: zoom > 5
+						})
+
+						layers.push(item);
+
+					}
+				}
+
+				let outline = new BitmapLayer(props,{
+						image: `assets/box.png`,
+						id: `${props.id}_outline`,
+						bounds: [left,bottom,right,top]
+					})
+
+				// layers.push(outline);
+				return layers
+			}
+		})
+		layers.push(tileLayer)
 
 		deckgl = new Deck({
 			parent: el,
 			views: new OrthographicView(),
-		    initialViewState: { target: [100, 100, 0], zoom: 2 },
-			// onViewStateChange: ({viewState}) => {
-			// 	let width = 1422;
-			// 	let height = 905;
-			// 	const view = new OrthographicView(viewState.main);
-			// 	let viewport = view.makeViewport({width, height, viewState})
-			// 	bounds = viewport.getBounds();
-			// 	zoom = viewport.zoom;
-  			// },
+		    initialViewState: { target: [100, 100, 0], zoom: 6 },
+			onViewStateChange: ({viewState}) => {
+				let width = 1240;
+				let height = 903;
+				const view = new OrthographicView(viewState.main);
+				let viewport = view.makeViewport({width, height, viewState})
+				bounds = viewport.getBounds();
+				zoom = viewport.zoom;
+				// console.log(zoom,bounds)
+  			},
 			controller: true,
 			layers: layers
-			//[
+			// [
 				// new BitmapLayer({
-				// 	// image: 'assets/shannon-dxt1.ktx2',
-				// 	image: 'assets/demo/test.jpg',
-				// 	// image: 'assets/kodim03.basis',
-				// 	// image: texture,
-				// 	// loaders: [BasisLoader, CompressedTextureLoader],
-				// 	// loadOptions: {mipmap: false},
+				// 	image: texture,
 				// 	id: `_bitmap`,
 				// 	bounds: [50,100,100,50]//[0,5,5,0]
 				// }),
@@ -282,12 +384,11 @@
 			// basis
 			// new IconLayer({
 			// 	id: 'IconLayer',
-			// 	data,
 			// 	getIcon: d => d.id,
 			// 	getPosition: d => d.coordinates,
 			// 	getSize: 5,
-			// 	iconAtlas: 'assets/kodim03.basis',
-			// 	loaders: [BasisLoader],
+			// 	iconAtlas: texture,
+			// 	// loaders: [BasisLoader],
 			// 	// iconAtlas: 'assets/spritesheet_128.jpeg',
 			// 	iconMapping: spriteObject,
 			// 	sizeUnits: 'common',
@@ -311,80 +412,6 @@
 			// }),
 
 
-			// new TileLayer({
-      		// 	tileSize: 512,
-			// 	coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-			// 	// data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-
-      		// 	// extent: [0, 0, 1422, 905],
-      		// 	getTileData: async ({id, bbox}) => {
-			// 		if(zoom < 5){
-			// 			return null;
-			// 		}
-        	// 		return getData(bbox, id);
-      		// 	},
-			// 	renderSubLayers: props => {
-
-			// 		const {
-        	// 			bbox: {left, bottom, right, top}
-      		// 		} = props.tile;
-
-			// 		// console.log(props.id,props.data[0])
-			// 		let layers = [
-			// 		]
-			// 		// console.log(props.id)
-			// 		if(props.data && props.data.length > 0){
-
-			// 			for (let image in props.data){
-
-			// 				let imageId = props.data[image].id;
-			// 				let imageCoors = props.data[image].coordinates;
-			// 				let imageCoorsFinal = [imageCoors[0]-2.5,imageCoors[1]+5-2.5,imageCoors[0]+5-2.5,imageCoors[1]-2.5];
-
-			// 				let item = new BitmapLayer(props,{
-			// 					image: `assets/${imageId}.jpeg`,
-			// 					id: `${props.id}_${image}_bitmap`,
-			// 					bounds: imageCoorsFinal,//[0,5,5,0]
-			// 					visible: zoom > 5
-			// 				})
-
-			// 				layers.push(item);
-
-			// 			}
-			// 		}
-
-			// 		// let outline = new BitmapLayer(props,{
-			// 		// 		image: `assets/box.png`,
-			// 		// 		id: `${props.id}_outline`,
-			// 		// 		bounds: [left,bottom,right,top]
-			// 		// 	})
-
-			// 		// layers.push(outline);
-
-
-			// 		// [left, bottom, right, top]
-			// 		return layers //[
-			// 			// new BitmapLayer(props, {
-			// 			// 	//data: null,
-			// 			// 	image: `assets/${imageId}.jpeg`,
-			// 			// 	id: `${props.id}_bitmap`,
-			// 			// 	bounds: imageCoorsFinal//[0,5,5,0]
-			// 			// }),
-
-			// 			// new IconLayer({
-			// 			// 	data: props.data,
-			// 			// 	id: `${props.id}_icon`,
-			// 			// 	getIcon: d => d.id,
-			// 			// 	getPosition: d => d.coordinates,
-			// 			// 	getSize: 5,
-			// 			// 	iconAtlas: 'assets/spritesheet_128.jpeg',
-			// 			// 	iconMapping: spriteObject,
-			// 			// 	sizeUnits: 'common',
-			// 			// 	visible: zoom > 5
-			// 			// })
-			// 		//]
-			// 	}
-			// }),
 
 
 
@@ -404,7 +431,7 @@
 				// 		iconMapping: spriteObject,
 				// 		sizeUnits: 'common'
 				// })
-			//]
+			// ]
 		});
 
 	})

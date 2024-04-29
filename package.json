@@ -42,6 +42,7 @@
 	"browserslist": "> 0.5%, last 4 versions, not ie <= 11, not ie_mob <= 11",
 	"dependencies": {
 		"@deck.gl/core": "^9.0.9",
+		"@deck.gl/geo-layers": "^9.0.12",
 		"@deck.gl/layers": "^9.0.9",
 		"@loaders.gl/core": "^4.2.0-alpha.6",
 		"@loaders.gl/images": "^4.2.0-alpha.6",
