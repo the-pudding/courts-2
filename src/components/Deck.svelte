@@ -111,6 +111,38 @@
 			};
 			layerProps.push(props);
 		}
+
+		let options = {
+			'basis': {
+				format: "astc-4x4"
+			},
+			'compressed-texture': {useBasis: true}
+		}
+
+		const result = await load('assets/mi_64.basis', BasisLoader, options);
+		const image = result[0];
+		let texture = {
+			data: image,
+			width: 4096,
+			height: 4096,
+			compressed: true,
+			mipmaps: false,
+    	}
+
+		layerProps[0].iconAtlas = texture;
+
+		const resultNy = await load('assets/ny_64.basis', BasisLoader, options);
+		const imageNy = resultNy[0];
+		let textureNy = {
+			data: imageNy,
+			width: 4096,
+			height: 4096,
+			compressed: true,
+			mipmaps: false,
+    	}
+
+		layerProps[1].iconAtlas = textureNy;
+
 		return true;
 	}
 	
@@ -120,6 +152,60 @@
 			layerProps[layer].data = dataTobind;
 		}
 		return true;
+	}
+
+	async function makeTileLayer(){
+
+		let tileLayer = new TileLayer({
+			tileSize: 512,
+			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+			getTileData: async ({id, bbox}) => {
+				if(zoom < 5){
+					return null;
+				}
+				return getData(bbox, id);
+			},
+			renderSubLayers: props => {
+
+				const {
+					bbox: {left, bottom, right, top}
+				} = props.tile;
+
+				let layers = [
+				]
+
+				if(props.data && props.data.length > 0){
+
+					for (let image in props.data){
+
+						let imageId = props.data[image].id;
+						let imageCoors = props.data[image].coordinates;
+						// let imageCoorsFinal = [imageCoors[0],imageCoors[1],imageCoors[0],imageCoors[1]];
+						let imageCoorsFinal = [imageCoors[0]-2.5,imageCoors[1]+5-2.5,imageCoors[0]+5-2.5,imageCoors[1]-2.5];
+
+						let item = new BitmapLayer(props,{
+							image: `assets/full/google_${imageId.replace("/","_")}.jpeg`,
+							id: `${props.id}_${imageId}_bitmap`,
+							bounds: imageCoorsFinal,//[0,5,5,0]
+							visible: zoom > 5
+						})
+
+						layers.push(item);
+
+					}
+				}
+
+				let outline = new BitmapLayer(props,{
+						image: `assets/box.png`,
+						id: `${props.id}_outline`,
+						bounds: [left,bottom,right,top]
+					})
+
+				// layers.push(outline);
+				return layers
+			}
+		})
+		layers.push(tileLayer)	
 	}
 
 	async function makeIconLayers(){
@@ -244,9 +330,10 @@
 		spriteMap = await makeSpriteObject();
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
-		// await makeIconLayers();
+		await makeIconLayers();
+		await makeTileLayer();
 
-		layers = [];
+		// layers = [];
 
 
 		const geocoder = new MapboxGeocoder({
@@ -263,100 +350,6 @@
 		geocoder.on('result', e => {
     		sortImages(e);
 		});
-
-		// result = loader && (await load(arrayBuffer, loader, options));
-		let options = {
-			'basis': {
-				format: "astc-4x4"
-			},
-			'compressed-texture': {useBasis: true}
-		}
-
-		const result = await load('assets/mi_64.basis', BasisLoader, options);
-		const image = result[0];
-		let texture = {
-			data: image,
-			width: 3264,
-			height: 3200,
-			compressed: true,
-			mipmaps: false,
-    	}
-
-		layerProps[0].iconAtlas = texture;
-
-		const resultNy = await load('assets/ny_64.basis', BasisLoader, options);
-		const imageNy = resultNy[0];
-		let textureNy = {
-			data: imageNy,
-			width: 4224,
-			height: 4160,
-			compressed: true,
-			mipmaps: false,
-    	}
-
-		layerProps[1].iconAtlas = textureNy;
-
-
-
-		for (let layer in layerProps){
-			let iconLayer = new IconLayer({
-				...layerProps[layer]
-			})
-			layers.push(iconLayer)
-		}
-
-		// layers.push(test)
-
-		let tileLayer = new TileLayer({
-			tileSize: 512,
-			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-			getTileData: async ({id, bbox}) => {
-				if(zoom < 5){
-					return null;
-				}
-				return getData(bbox, id);
-			},
-			renderSubLayers: props => {
-
-				const {
-					bbox: {left, bottom, right, top}
-				} = props.tile;
-
-				let layers = [
-				]
-
-				if(props.data && props.data.length > 0){
-
-					for (let image in props.data){
-
-						let imageId = props.data[image].id;
-						let imageCoors = props.data[image].coordinates;
-						// let imageCoorsFinal = [imageCoors[0],imageCoors[1],imageCoors[0],imageCoors[1]];
-						let imageCoorsFinal = [imageCoors[0]-2.5,imageCoors[1]+5-2.5,imageCoors[0]+5-2.5,imageCoors[1]-2.5];
-
-						let item = new BitmapLayer(props,{
-							image: `assets/full/google_${imageId.replace("/","_")}.jpeg`,
-							id: `${props.id}_${imageId}_bitmap`,
-							bounds: imageCoorsFinal,//[0,5,5,0]
-							visible: zoom > 5
-						})
-
-						layers.push(item);
-
-					}
-				}
-
-				let outline = new BitmapLayer(props,{
-						image: `assets/box.png`,
-						id: `${props.id}_outline`,
-						bounds: [left,bottom,right,top]
-					})
-
-				// layers.push(outline);
-				return layers
-			}
-		})
-		layers.push(tileLayer)
 
 		deckgl = new Deck({
 			parent: el,
@@ -457,6 +450,7 @@
 
 		await assignDataToIconLayers()
 		await makeIconLayers();
+		await makeTileLayer();
 
 		deckgl.setProps({
 			layers: layers
