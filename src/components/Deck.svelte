@@ -101,6 +101,42 @@
 		return test;
 	}
 
+	function getTexture(state){
+		return new Promise(async (resolve, reject) => {
+
+			let options = {
+			'basis': {
+				format: "etc1",//"astc-4x4",
+				//'CDN':false,
+				//'useLocalLibraries':true,
+				'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
+			},
+			'compressed-texture': {
+				useBasis: true,
+				'CDN':false,
+				'useLocalLibraries':true
+			},
+			'CDN':false,
+			'useLocalLibraries':true
+
+		}
+
+			const result = await load(`assets/${state}.basis`, BasisLoader, options);
+			const image = result[0]//.filter((d,i) => i < 1);
+			console.log(image)
+			let texture = {
+				data: image,
+				width: 4096,
+				height: 4096,
+				compressed: true,
+			}
+
+			layerProps[state].iconAtlas = texture;
+			resolve();
+		})
+
+	}
+
 	async function makeIconLayersProps(){
 		for (let state of states){
 			let props = {
@@ -120,36 +156,26 @@
 			layerProps.push(props);
 		}
 
-		let options = {
-			'basis': {
-				format: "etc1",//"astc-4x4",
-				//'CDN':false,
-				//'useLocalLibraries':true,
-				'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
-			},
-			'compressed-texture': {
-				useBasis: true,
-				'CDN':false,
-				'useLocalLibraries':true
-			},
-			'CDN':false,
-			'useLocalLibraries':true
 
-		}
 
-		for (let state in states){
-			const result = await load(`assets/${states[state]}.basis`, BasisLoader, options);
-			const image = result[0]//.filter((d,i) => i < 1);
-			console.log(image)
-			let texture = {
-				data: image,
-				width: 4096,
-				height: 4096,
-				compressed: true,
-			}
+		await Promise.all(states.map(async d => {
+            await getTexture(d);
+        }));
 
-			layerProps[state].iconAtlas = texture;
-		}
+
+		// for (let state in states){
+		// 	const result = await load(`assets/${states[state]}.basis`, BasisLoader, options);
+		// 	const image = result[0]//.filter((d,i) => i < 1);
+		// 	console.log(image)
+		// 	let texture = {
+		// 		data: image,
+		// 		width: 4096,
+		// 		height: 4096,
+		// 		compressed: true,
+		// 	}
+
+		// 	layerProps[state].iconAtlas = texture;
+		// }
 		return true;
 	}
 	
