@@ -14,12 +14,20 @@
 	import SortTable from "./helpers/SortTable.svelte";
 	import { LucideAsterisk } from "lucide-svelte";
 
-	import {load} from '@loaders.gl/core';
+	import {load, setLoaderOptions} from '@loaders.gl/core';
+
+	// import { basis } from '@loaders.gl/core';
 	
 	import {
-	BasisLoader,
+		BasisLoader,
 	} from '@loaders.gl/textures';
 
+
+	// setLoaderOptions({
+	// 	modules: {
+	// 		BasisLoader
+	// 	}
+	// });
 
 
 
@@ -114,9 +122,19 @@
 
 		let options = {
 			'basis': {
-				format: "astc-4x4"
+				format: "astc-4x4",
+				//'CDN':false,
+				//'useLocalLibraries':true,
+				'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
 			},
-			'compressed-texture': {useBasis: true}
+			'compressed-texture': {
+				useBasis: true,
+				'CDN':false,
+				'useLocalLibraries':true
+			},
+			'CDN':false,
+			'useLocalLibraries':true
+
 		}
 
 		const result = await load('assets/mi_64.basis', BasisLoader, options);
