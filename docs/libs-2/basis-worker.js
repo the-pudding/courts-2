@@ -202,9 +202,9 @@
       return `${options.CDN}/${moduleName}@${VERSION}/dist/libs/${libraryName}`;
     }
     if (isWorker) {
-      return `../src/libs/${libraryName}`;
+      return `../libs/${libraryName}`;
     }
-    return `modules/${moduleName}/src/libs/${libraryName}`;
+    return `modules/${moduleName}/libs/${libraryName}`;
   }
   async function loadLibraryFromFile(libraryUrl) {
     if (libraryUrl.endsWith("wasm")) {
