@@ -3,7 +3,7 @@
 	import { range, sort } from "d3";
 	import filterLocation from '$actions/filterAddresses.js'
 	import colorSort from "$actions/colorSort.js";
-	import courtData from "$data/court_data.csv"
+	import courtData from "$data/data.csv";//"$data/court_data.csv"
 
 	import {Deck, OrthographicView, COORDINATE_SYSTEM} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer} from '@deck.gl/layers';
@@ -43,7 +43,7 @@
 	}
 
 	let el;
-	let zoom;
+	let zoom = 3;
 	let deckgl;
 	let bounds;
 	let inputBox;
@@ -54,7 +54,7 @@
 	let height = 64;//2176;//128;
 	let spriteMap = {};
 
-	let states = ["mi","ny"];
+	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
 
@@ -108,7 +108,7 @@
 				getIcon: d => d.id,
 				getPosition: d => d.coordinates,
 				getSize: 5,
-				iconAtlas: `assets/spritesheet_128_${state}.jpeg`,
+				//iconAtlas: `assets/spritesheet_128_${state}.jpeg`,
 				iconMapping: spriteMap[state],
 				sizeUnits: 'common',
 				transitions: {
@@ -122,7 +122,7 @@
 
 		let options = {
 			'basis': {
-				format: "astc-4x4",
+				format: "etc1",//"astc-4x4",
 				//'CDN':false,
 				//'useLocalLibraries':true,
 				'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
@@ -137,30 +137,19 @@
 
 		}
 
-		const result = await load('assets/mi_64.basis', BasisLoader, options);
-		const image = result[0];
-		let texture = {
-			data: image,
-			width: 4096,
-			height: 4096,
-			compressed: true,
-			mipmaps: false,
-    	}
+		for (let state in states){
+			const result = await load(`assets/${states[state]}.basis`, BasisLoader, options);
+			const image = result[0]//.filter((d,i) => i < 1);
+			console.log(image)
+			let texture = {
+				data: image,
+				width: 4096,
+				height: 4096,
+				compressed: true,
+			}
 
-		layerProps[0].iconAtlas = texture;
-
-		const resultNy = await load('assets/ny_64.basis', BasisLoader, options);
-		const imageNy = resultNy[0];
-		let textureNy = {
-			data: imageNy,
-			width: 4096,
-			height: 4096,
-			compressed: true,
-			mipmaps: false,
-    	}
-
-		layerProps[1].iconAtlas = textureNy;
-
+			layerProps[state].iconAtlas = texture;
+		}
 		return true;
 	}
 	
@@ -178,6 +167,7 @@
 			tileSize: 512,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
 			getTileData: async ({id, bbox}) => {
+				console.log(zoom)
 				if(zoom < 5){
 					return null;
 				}
@@ -372,7 +362,7 @@
 		deckgl = new Deck({
 			parent: el,
 			views: new OrthographicView(),
-		    initialViewState: { target: [100, 100, 0], zoom: 6 },
+		    initialViewState: { target: [100, 100, 0], zoom: zoom },
 			onViewStateChange: ({viewState}) => {
 				let width = 1240;
 				let height = 903;
