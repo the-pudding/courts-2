@@ -105,21 +105,21 @@
 		return new Promise(async (resolve, reject) => {
 
 			let options = {
-			'basis': {
-				format: "etc1",//"astc-4x4",
-				//'CDN':false,
-				//'useLocalLibraries':true,
-				'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
-			},
-			'compressed-texture': {
-				useBasis: true,
+				'basis': {
+					format: "etc1",//"astc-4x4",
+					//'CDN':false,
+					//'useLocalLibraries':true,
+					'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
+				},
+				'compressed-texture': {
+					useBasis: true,
+					'CDN':false,
+					'useLocalLibraries':true
+				},
 				'CDN':false,
 				'useLocalLibraries':true
-			},
-			'CDN':false,
-			'useLocalLibraries':true
 
-		}
+			}
 
 			const result = await load(`assets/${state}.basis`, BasisLoader, options);
 			const image = result[0]//.filter((d,i) => i < 1);
@@ -218,7 +218,7 @@
 						let imageCoorsFinal = [imageCoors[0]-2.5,imageCoors[1]+5-2.5,imageCoors[0]+5-2.5,imageCoors[1]-2.5];
 
 						let item = new BitmapLayer(props,{
-							image: `assets/full/google_${imageId.replace("/","_")}.jpeg`,
+							image: `https://s3.amazonaws.com/pudding.cool/projects/courts/png/${imageId}.png`,
 							id: `${props.id}_${imageId}_bitmap`,
 							bounds: imageCoorsFinal,//[0,5,5,0]
 							visible: zoom > 5
