@@ -1,35 +1,24 @@
 <script>
 	import { getContext, onMount } from "svelte";
-	import { range, sort } from "d3";
+	import { range, sort, easeCubic } from "d3";
 	import filterLocation from '$actions/filterAddresses.js'
 	import colorSort from "$actions/colorSort.js";
 	import courtData from "$data/data.csv";//"$data/court_data.csv"
-
-	import {Deck, OrthographicView, COORDINATE_SYSTEM} from '@deck.gl/core';
-	import {IconLayer, BitmapLayer} from '@deck.gl/layers';
+	import {Deck, OrthographicView, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
+	import {IconLayer, BitmapLayer, TextLayer} from '@deck.gl/layers';
 	import {TileLayer} from '@deck.gl/geo-layers';
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 	import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
-	import SortTable from "./helpers/SortTable.svelte";
-	import { LucideAsterisk } from "lucide-svelte";
 
-	import {load, setLoaderOptions} from '@loaders.gl/core';
-
-	// import { basis } from '@loaders.gl/core';
+	import {load, setLoaderOptions, registerLoaders} from '@loaders.gl/core';
 	
+	export let viewportHeight;
+	export let viewportWidth;
+
 	import {
 		BasisLoader,
 	} from '@loaders.gl/textures';
-
-
-	// setLoaderOptions({
-	// 	modules: {
-	// 		BasisLoader
-	// 	}
-	// });
-
-
 
 	function shuffle(a) {
 		var j, x, i;
@@ -75,7 +64,7 @@
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 			let x = (i % squareSize) * 5 + (i % squareSize)*.1// + Math.random()*1;
 			let y = Math.floor(i/squareSize) * 5 + Math.floor(i/squareSize)*1*.1// + Math.random() * 1;
-			return {"coordinates":[x,y], id:d.id.replace(".jpg",""), "geo": d.geo};
+			return {"coordinates":[x,y], id:d.id.replace(".jpg",""), "geo": d.geo,squareSize:squareSize};
 		});
 		return spritePositionsMaster;
 	}
@@ -96,9 +85,18 @@
 				spriteObject[row.id] = row;
 			}
 			test[state] = spriteObject
-			console.log(test)
 		}
 		return test;
+	}
+
+	function preloadBasisLoader() {
+		return new Promise(async (resolve, reject) => {
+	  		const dummyBasisFile = 'assets/load.basis';  // Path to a small BASIS file
+  			await load(dummyBasisFile).then(() => {
+				console.log('BasisLoader preloaded');
+				resolve();
+			})
+		})
 	}
 
 	function getTexture(state){
@@ -107,8 +105,8 @@
 			let options = {
 				'basis': {
 					format: "etc1",//"astc-4x4",
-					//'CDN':false,
-					//'useLocalLibraries':true,
+					'CDN':false,
+					'useLocalLibraries':true,
 					'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
 				},
 				'compressed-texture': {
@@ -118,21 +116,22 @@
 				},
 				'CDN':false,
 				'useLocalLibraries':true
-
 			}
 
-			const result = await load(`assets/${state}.basis`, BasisLoader, options);
-			const image = result[0]//.filter((d,i) => i < 1);
-			console.log(image)
-			let texture = {
-				data: image,
-				width: 4096,
-				height: 4096,
-				compressed: true,
-			}
+			await load(`assets/${state}.basis`).then((result) => {
+				console.log("basis loaded ",state)
+				const image = result[0]//.filter((d,i) => i < 1);
+				let texture = {
+					data: image,
+					width: 4096,
+					height: 4096,
+					compressed: true,
+				}
 
-			layerProps[state].iconAtlas = texture;
-			resolve();
+				layerProps[state].iconAtlas = texture;
+				resolve();
+			});
+
 		})
 
 	}
@@ -144,38 +143,24 @@
 				getIcon: d => d.id,
 				getPosition: d => d.coordinates,
 				getSize: 5,
+				onClick: (info, event) => console.log('Clicked:', info, event),
+				pickable: true,
 				//iconAtlas: `assets/spritesheet_128_${state}.jpeg`,
 				iconMapping: spriteMap[state],
 				sizeUnits: 'common',
 				transitions: {
 					getPosition: {
-						duration: 300,
+						duration: 1000,
 					}
 				}
 			};
 			layerProps.push(props);
 		}
 
-
-
+		await preloadBasisLoader()//.then(async() => {
 		await Promise.all(states.map(async d => {
-            await getTexture(d);
-        }));
-
-
-		// for (let state in states){
-		// 	const result = await load(`assets/${states[state]}.basis`, BasisLoader, options);
-		// 	const image = result[0]//.filter((d,i) => i < 1);
-		// 	console.log(image)
-		// 	let texture = {
-		// 		data: image,
-		// 		width: 4096,
-		// 		height: 4096,
-		// 		compressed: true,
-		// 	}
-
-		// 	layerProps[state].iconAtlas = texture;
-		// }
+			await getTexture(d);
+        }))
 		return true;
 	}
 	
@@ -190,10 +175,9 @@
 	async function makeTileLayer(){
 
 		let tileLayer = new TileLayer({
-			tileSize: 512,
+			tileSize: 256,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
 			getTileData: async ({id, bbox}) => {
-				console.log(zoom)
 				if(zoom < 5){
 					return null;
 				}
@@ -208,34 +192,70 @@
 				let layers = [
 				]
 
+				console.log(left,top)
+
 				if(props.data && props.data.length > 0){
 
+
+					
 					for (let image in props.data){
 
 						let imageId = props.data[image].id;
 						let imageCoors = props.data[image].coordinates;
+						
 						// let imageCoorsFinal = [imageCoors[0],imageCoors[1],imageCoors[0],imageCoors[1]];
 						let imageCoorsFinal = [imageCoors[0]-2.5,imageCoors[1]+5-2.5,imageCoors[0]+5-2.5,imageCoors[1]-2.5];
 
-						let item = new BitmapLayer(props,{
-							image: `https://s3.amazonaws.com/pudding.cool/projects/courts/png/${imageId}.png`,
+						let imgType = "jpg";
+						// if(zoom > 6){
+						// 	imgType = "png";
+						// }
+
+						const item = new BitmapLayer(props,{
+							image: `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`,
 							id: `${props.id}_${imageId}_bitmap`,
 							bounds: imageCoorsFinal,//[0,5,5,0]
-							visible: zoom > 5
+							visible: zoom > 5,
+							pickable: false,
 						})
 
 						layers.push(item);
 
+						const TEXT_DATA = [
+							{
+								text: 'Hello',
+								position: [imageCoorsFinal[0], imageCoorsFinal[1]],
+								color: [255, 0, 0]
+							}
+						];
+
+						const textLayer = new TextLayer(props, {
+							data: TEXT_DATA,
+							id: `TextLayer-${imageId}-${props.id}`,
+							getPosition: d => d.position,
+							getText: d => d.text,
+							getAlignmentBaseline: 'center',
+							getColor: [255, 0, 0],
+							getSize: 12,
+							getTextAnchor: 'middle',
+						});
+
+						layers.push(textLayer);
+
 					}
 				}
 
-				let outline = new BitmapLayer(props,{
-						image: `assets/box.png`,
-						id: `${props.id}_outline`,
-						bounds: [left,bottom,right,top]
-					})
+				if(bounds){
+					// let outline = new BitmapLayer(props,{
+					// 	image: `assets/box.png`,
+					// 	id: `${props.id}_outline`,
+					// 	bounds: [bounds[0]+1,bounds[1]+1,bounds[2]-1,bounds[3]-1]
+					// 	//bounds: [left,bottom,right,top]
+					// })
 
-				// layers.push(outline);
+					// layers.push(outline);
+				}
+
 				return layers
 			}
 		})
@@ -270,73 +290,6 @@
 	let highResData = [];
 	let drawTimeout;
 
-	function renderLayers(){
-		console.log("rendering","zoom:",zoom)
-		// console.log(bounds)
-		highResData = [];
-
-		if(drawTimeout){
-			clearTimeout(drawTimeout);
-		}
-
-		if(zoom > 5){
-			highResData = data
-				.filter(d => {
-					let x = d.coordinates[0];
-					let y = d.coordinates[1];
-
-					if(x > bounds[0] && x < bounds[2] && y > bounds[1] && y < bounds[3]){
-						return d;
-					}
-				})
-
-
-			drawTimeout = setTimeout(() => {
-				deckgl.setProps(
-					{
-						layers: [
-							new IconLayer({
-								id: 'IconLayer',
-								data,
-								getIcon: d => d.id,
-								getPosition: d => d.coordinates,
-								getSize: 5,
-								iconAtlas: 'assets/spritesheet_128.jpeg',
-								iconMapping: spriteObject,
-								sizeUnits: 'common'
-							}),
-							new IconLayer({
-								id: `users_${zoom}_${bounds[0]}`,
-								data: highResData,
-								getIcon: d => ({
-									url: `assets/${d.id}.jpeg`,
-									width: 500,
-									height: 500,
-									mask: false
-								}),
-								getSize: 5,
-								getPosition: d => d.coordinates,
-								sizeUnits: 'common',
-								onIconError: e => {
-      								console.log(e)
-    							}
-								//visible: zoom > 5
-							})
-
-						]
-					}
-				);
-			},100)
-		}
-		// console.log(highResData)
-
-	}
-
-	function errorMessage(error){
-		console.log(error)
-	}
-
-
 	async function getData(bbox, id) {
   	// Stall for 20ms - simulate an async request
   		// await new Promise(resolve => setTimeout(resolve, 100));
@@ -344,23 +297,59 @@
 			return [];
 		}
 
-		let highResData = spritePositionsMaster
-			.filter(d => {
-				let x = d.coordinates[0];
-				let y = d.coordinates[1];
-				if(x >= bbox.left && x <= bbox.right && y >= bbox.top && y <= bbox.bottom){
-					return d;
-				}
-			})
+		// console.log(bbox)
+		const { left, right, top, bottom } = bbox;
 
-		// console.log(highResData)
+		let highResData = [];
+		for (let i = 0; i < spritePositionsMaster.length; i++) {
+			const d = spritePositionsMaster[i];
+			const [x, y] = d.coordinates;
+			if (x >= left && x <= right && y >= top && y <= bottom) {
+				highResData.push(d);
+			}
+		}
 
 		return highResData
 	}
 
+	function showObject(object){
+		console.log(object);
+	}
+
 	onMount(async () => {
 
+		setLoaderOptions({
+			'basis': {
+					format: "etc1",//"astc-4x4",
+					maxConcurrency:1,
+					'CDN':false,
+					worker: true,  // Enable workers globally for all loaders
+					'useLocalLibraries':true,
+					'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
+				},
+
+			worker: true,  // Enable workers globally for all loaders
+		// 	'workerUrl':"libs-2/basis-worker.js",//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
+			'CDN':false,
+			maxConcurrency:1,
+			'useLocalLibraries':true,
+			// BasisLoader: {
+			// 	'basis': {
+			// 		format: "etc1",//"astc-4x4",
+			// 		'CDN':false,
+			// 		'useLocalLibraries':true,
+			// 		'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
+			// 	},
+			// 	'workerUrl':"libs-2/basis-worker.js",//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
+			// 	'CDN':false,
+			// 	'useLocalLibraries':true
+			// },
+		});
+
+		registerLoaders(BasisLoader);
+
 		spritePositionsMaster = await makeMasterData([],courtData);
+		console.log("sprite positions loaded")
 		spriteMap = await makeSpriteObject();
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
@@ -372,8 +361,9 @@
 
 		const geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2xqc2g3N2o5MHAyMDNjdGhzM2V2cmR3NiJ9.3x1ManoY4deDkAGBuUMnSw',
+			types: 'region,postcode,district,place,neighborhood',
 			options: {
-				marker: false
+				marker: false,
 			}
 		});
 		geocoder.addTo(inputBox)
@@ -381,100 +371,90 @@
 
 		// inputBox.appendChild("#geocoder");
 
-		geocoder.on('result', e => {
-    		sortImages(e);
+		geocoder.on('result', async(e) => {
+    		await sortImages(e);
+			rebuildGrid();
 		});
 
 		deckgl = new Deck({
 			parent: el,
 			views: new OrthographicView(),
-		    initialViewState: { target: [100, 100, 0], zoom: zoom },
+		    initialViewState: { 
+				target: [100, 100, 0],
+				zoom: zoom,
+				transitionInterpolator: new LinearInterpolator(['zoom']),
+			    transitionDuration: 'auto'
+			},
 			onViewStateChange: ({viewState}) => {
-				let width = 1240;
-				let height = 903;
-				const view = new OrthographicView(viewState.main);
-				let viewport = view.makeViewport({width, height, viewState})
-				bounds = viewport.getBounds();
-				zoom = viewport.zoom;
+				zoom = viewState.zoom;
+				console.log(zoom)
+				// let width = viewportWidth;
+				// let height = viewportHeight;
+				// const view = new OrthographicView(viewState.main);
+				// let viewport = view.makeViewport({width, height, viewState})
+				// bounds = viewport.getBounds();
+				// zoom = viewport.zoom;
 				// console.log(zoom,bounds)
   			},
 			controller: true,
+			// getTooltip: ({object}) => showObject(object),
 			layers: layers
-			// [
-				// new BitmapLayer({
-				// 	image: texture,
-				// 	id: `_bitmap`,
-				// 	bounds: [50,100,100,50]//[0,5,5,0]
-				// }),
-			
-
-			// basis
-			// new IconLayer({
-			// 	id: 'IconLayer',
-			// 	getIcon: d => d.id,
-			// 	getPosition: d => d.coordinates,
-			// 	getSize: 5,
-			// 	iconAtlas: texture,
-			// 	// loaders: [BasisLoader],
-			// 	// iconAtlas: 'assets/spritesheet_128.jpeg',
-			// 	iconMapping: spriteObject,
-			// 	sizeUnits: 'common',
-			// }),
-
-			// // WORKING ICON LAYER
-
-
-
-
-			// // WORKING ICON LAYER
-			// new IconLayer({
-			// 	id: 'IconLayer',
-			// 	data,
-			// 	getIcon: d => d.id,
-			// 	getPosition: d => d.coordinates,
-			// 	getSize: 5,
-			// 	iconAtlas: 'assets/spritesheet_128.jpeg',
-			// 	iconMapping: spriteObject,
-			// 	sizeUnits: 'common'
-			// }),
-
-
-
-
-
-				// new IconLayer({
-				// 		id: 'IconLayer',
-				// 		data: data,
-				// 		// getIcon: d => d.id,
-				// 		// getIcon: d => ({
-				// 		// 	url: `assets/small/${d.id}.jpg`,
-				// 		// 	width: 128,
-				// 		// 	height: 128,
-				// 		// 	mask: false
-				// 		// }),
-				// 		getPosition: d => d.coordinates,
-				// 		getSize: 5,
-				// 		iconAtlas: 'assets/spritesheet_128.jpeg',
-				// 		iconMapping: spriteObject,
-				// 		sizeUnits: 'common'
-				// })
-			// ]
 		});
 
 	})
 
-	async function sortImages(locationData){
-		
-        let ids = filterLocation(courtData,locationData,"bbox");
-		
-		spritePositionsMaster = await makeMasterData(ids,courtData);
+	function zoomTo(zoomLevel){
+		return new Promise((resolve, reject) => {
+			const interpolator = new LinearInterpolator(['zoom']);
 
+			deckgl.setProps({
+				views: new OrthographicView(),
+				initialViewState: {
+					// ...deckgl.viewState,
+					target: [0, 0, 0],
+					zoom: zoomLevel,
+					controller: true,
+					transitionDuration: 1000,
+					transitionInterpolator: interpolator,
+					transitionEasing: easeCubic,
+					onTransitionEnd: () => {
+						resolve();
+					}
+				},
+			});
+		})
+	}
+
+	async function rebuildGrid(){
+		console.log(spritePositionsMaster)
 		await assignDataToIconLayers()
 		await makeIconLayers();
+		await makeTileLayer();
 
-		deckgl.setProps({
-			layers: layers
-		});
+		if(zoom == -1.5){
+			deckgl.setProps({
+				layers: layers
+			});	
+		}
+		else {
+			await zoomTo(-1.5);
+			deckgl.setProps({
+				layers: layers
+			});
+			setTimeout(()=> {
+				zoomTo(2.8);
+			},1000)
+		}
+	}
+
+
+	function sortImages(locationData){
+		return new Promise((resolve, reject) => {
+        	let ids = filterLocation(courtData,locationData,"bbox");
+			console.log(ids)
+			spritePositionsMaster = makeMasterData(ids,courtData);
+			resolve();
+		})
 	}
 
 
@@ -504,14 +484,17 @@
 </div>
 
 <style>
+	
 	.overlay {
 		position: fixed;
 		top: 0;
 		left: 0;
         z-index: 1000;
+		
 	}
 
     .el {
+		/* background-color: white; */
         width: 100%;
 		height: 100%;
 		position: absolute;

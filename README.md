@@ -1,23 +1,29 @@
-IMAGE ATTRIBUTES
-- load lat/long
-- color identification
+*SPEED
+Chunk Basis files so loads with part of them working
+Remove so many images from loading in tilelayer
 
-IMAGE QUALITY
+IMAGE ATTRIBUTES
+-#color sort
+https://lokeshdhakar.com/projects/color-thief/#getting-started
+https://www.npmjs.com/package/colorthief
+https://hyunbinseo.medium.com/get-images-dominant-color-and-palette-using-color-thief-b7278c522511
+
+*IMAGE QUALITY
 - figure out the pixel size of low-res images and use that size rather than the 1000x1000
 - when re-sizing to 128 for low-res imagesx , figure out if that is ruining the image or if figma is better when resizing
 - higher-res image finder (use image size from different services, or pixelate calculate)
 
-SORTING
-- move to maps lapse
-
 SEARCH/FILTER
-- Animated
+* center zoom, zoom out make sense???
 
-Cluster??? - Ian Johnson thing
+*LIKE
 
-LIKE
+*COMMENT
 
-COMMENT
+*CITY/STATE
+- refactor textlayer to be on tile rather than on each image (using data accessor for all images in tile)
+
+*LAUNCH 3D VIEW
 
 
 
