@@ -49,6 +49,7 @@
 		"@loaders.gl/textures": "^4.2.0-alpha.6",
 		"@mapbox/mapbox-gl-geocoder": "^5.0.2",
 		"@mapbox/search-js-web": "^1.0.0-beta.19",
+		"@supabase/supabase-js": "^2.43.4",
 		"@turf/helpers": "^6.5.0",
 		"@turf/points-within-polygon": "^6.5.0"
 	}

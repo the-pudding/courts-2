@@ -1,12 +1,23 @@
 <script>
 	import { getContext, onMount } from "svelte";
-	import { range, sort, easeCubic } from "d3";
+	import { range, sort, easeCubic, scaleLinear } from "d3";
+
 	import filterLocation from '$actions/filterAddresses.js'
 	import colorSort from "$actions/colorSort.js";
 	import courtData from "$data/data.csv";//"$data/court_data.csv"
 	import {Deck, OrthographicView, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer, TextLayer} from '@deck.gl/layers';
 	import {TileLayer} from '@deck.gl/geo-layers';
+	import { fade } from 'svelte/transition';
+	import {ClipExtension} from '@deck.gl/extensions';
+
+	import {
+		readAll,
+		countRows,
+		addRow
+	} from "$utils/supabase.js";
+
+
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 	import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
@@ -31,6 +42,25 @@
 		return a;
 	}
 
+	const favesMapping = {
+		"marker": {
+			"x": 0,
+			"y": 0,
+			"width": 128,
+			"height": 128,
+			"anchorY": 64,
+			"mask": true
+		},
+		"marker-warning": {
+			"x": 128,
+			"y": 0,
+			"width": 128,
+			"height": 128,
+			"anchorY": 64,
+			"mask": false
+		}
+	}
+
 	let el;
 	let zoom = 3;
 	let deckgl;
@@ -46,7 +76,12 @@
 	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
+	let bitmapSublayers = [];
+	let renderedSublayers = [];
 
+	$: console.log(zoom)
+
+	// $: console.log(screenCoordinates)
 
 	function makeMasterData(toFilter,data){
 		let spritePositionsMaster;
@@ -64,8 +99,9 @@
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 			let x = (i % squareSize) * 5 + (i % squareSize)*.1// + Math.random()*1;
 			let y = Math.floor(i/squareSize) * 5 + Math.floor(i/squareSize)*1*.1// + Math.random() * 1;
-			return {"coordinates":[x,y], id:d.id.replace(".jpg",""), "geo": d.geo,squareSize:squareSize};
+			return {"coordinates":[x,y], id:d.id.replace(".jpg",""),location:d.location, state:d.state, geo:d.geo,squareSize:squareSize};
 		});
+
 		return spritePositionsMaster;
 	}
 
@@ -143,11 +179,11 @@
 				getIcon: d => d.id,
 				getPosition: d => d.coordinates,
 				getSize: 5,
-				onClick: (info, event) => console.log('Clicked:', info, event),
-				pickable: true,
-				//iconAtlas: `assets/spritesheet_128_${state}.jpeg`,
-				iconMapping: spriteMap[state],
+				// onHover: (info, event) => console.log('Hover:', info, event),
+				// onClick: (info, event) => console.log('Clicked:', info, event),
+				// pickable: true,
 				sizeUnits: 'common',
+				iconMapping: spriteMap[state],
 				transitions: {
 					getPosition: {
 						duration: 1000,
@@ -172,11 +208,32 @@
 		return true;
 	}
 
+	let tilesLoaded = [];
+	
 	async function makeTileLayer(){
 
 		let tileLayer = new TileLayer({
 			tileSize: 256,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+			onViewportLoad: layers => {
+				// console.log(layers,"hi")
+				renderedSublayers= Array.from(layers
+					.flatMap(obj => obj.content ? obj.content : [])
+					.reduce((map, item) => {
+						if (!map.has(+item.id)) {
+							map.set(+item.id, item);
+						}
+						return map;
+					}, new Map())
+					.values())
+					;
+    		},
+
+			// onClick: ((info, event) => {
+			// 					console.log(info)
+			// 				}),
+
+			// pickable:true,
 			getTileData: async ({id, bbox}) => {
 				if(zoom < 5){
 					return null;
@@ -192,40 +249,73 @@
 				let layers = [
 				]
 
-				console.log(left,top)
-
 				if(props.data && props.data.length > 0){
-
+					// console.log("rendering sublayers",props);
 
 					
+					
 					for (let image in props.data){
-
+						// console.log(props)
+						props.data[image].tileId = props.id;
+						// renderedSublayers.push(props.data[image]);
 						let imageId = props.data[image].id;
 						let imageCoors = props.data[image].coordinates;
-						
+						let imageName = `${props.data[image].location}, ${props.data[image].state}`;
+
 						// let imageCoorsFinal = [imageCoors[0],imageCoors[1],imageCoors[0],imageCoors[1]];
-						let imageCoorsFinal = [imageCoors[0]-2.5,imageCoors[1]+5-2.5,imageCoors[0]+5-2.5,imageCoors[1]-2.5];
+						let imageCoorsFinal = [
+							imageCoors[0]-2.5, //min x left
+							imageCoors[1]+5-2.5, //max y bottom
+							imageCoors[0]+5-2.5, // max x right
+							imageCoors[1]-2.5 //min y top
+						];
+
+						let left = imageCoors[0]-2.5;
+						let bottom = imageCoors[1]+5-2.5;
+						let right = imageCoors[0]+5-2.5;
+						let top = imageCoors[1]+2;
+
+						//Coordinates of the bounding box of the bitmap [left, bottom, right, top]
+						//Coordinates of four corners of the bitmap, should follow the sequence of 
+						//[[left, bottom], [left, top], [right, top], [right, bottom]]. 
+
 
 						let imgType = "jpg";
 						// if(zoom > 6){
 						// 	imgType = "png";
 						// }
 
+
+
 						const item = new BitmapLayer(props,{
 							image: `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`,
 							id: `${props.id}_${imageId}_bitmap`,
 							bounds: imageCoorsFinal,//[0,5,5,0]
 							visible: zoom > 5,
-							pickable: false,
+							// extensions: [new ClipExtension()],
+							// clipBounds: [left, bottom, right, top]
+							// pickable: false,
+							// onClick: (info, event) => console.log('Clicked:', info, event),
 						})
 
-						layers.push(item);
+						const itemTwo = new BitmapLayer(props,{
+							image: `assets/toolbar.jpg`,
+							id: `${props.id}_${imageId}_bitmap2`,
+							bounds: [[left, bottom], [left, top], [right, top], [right, bottom]],//[0,5,5,0]
+						})
 
 						const TEXT_DATA = [
 							{
-								text: 'Hello',
-								position: [imageCoorsFinal[0], imageCoorsFinal[1]],
-								color: [255, 0, 0]
+								text: imageName,
+								position: [imageCoorsFinal[0]+.1, imageCoorsFinal[1]-.2],
+								color: [255, 255, 255],
+								size:.2
+							},
+							{
+								text: "1",
+								position: [imageCoorsFinal[0]+5-.3, imageCoorsFinal[1]-.2],
+								color: [255, 255, 255],
+								size: .2
 							}
 						];
 
@@ -234,13 +324,48 @@
 							id: `TextLayer-${imageId}-${props.id}`,
 							getPosition: d => d.position,
 							getText: d => d.text,
+							characterSet: 'auto',
 							getAlignmentBaseline: 'center',
-							getColor: [255, 0, 0],
-							getSize: 12,
-							getTextAnchor: 'middle',
+							getColor: [255, 255, 255],
+							getSize: .3,
+							background: true,
+							getBackgroundColor: [0,0,0],
+							getTextAnchor: 'start',
+							sizeUnits: 'common',
 						});
 
+						const ICON_DATA = [
+							{
+								position: [imageCoorsFinal[0]+5-.5, imageCoorsFinal[1]-.5],
+								color: [255, 0, 0],
+							}
+						];
+
+						const iconLayerFave = new IconLayer(props, {
+							data: ICON_DATA,
+							coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+							id: `iconLayer-${imageId}-${props.id}`,
+							getPosition: d => d.position,
+							iconAtlas: 'assets/heart.png',
+							iconMapping: favesMapping,
+							getSize: .5,
+							getIcon: d => 'marker-warning',
+							// getColor: [255, 0, 0],
+							// mask: true,
+							// onHover: (info, event) => console.log('Hover:', info, event),
+							// onClick: (info, event) => console.log('Clicked:', info, event),
+							// alphaCutoff: 0,
+							// autoHighlight: true,
+							// autoHighlight: true,
+							sizeUnits: 'common',
+						});
+
+						layers.push(item);
+						layers.push(itemTwo);
+
 						layers.push(textLayer);
+						// layers.push(iconLayerFave);
+
 
 					}
 				}
@@ -256,8 +381,14 @@
 					// layers.push(outline);
 				}
 
+				// renderedSublayers = [...renderedSublayers];
+
 				return layers
-			}
+			},
+			// onClick: (info, event) => console.log('Clicked:', info, event),
+			// alphaCutoff: 0,
+			// autoHighlight: true,
+
 		})
 		layers.push(tileLayer)	
 	}
@@ -290,6 +421,33 @@
 	let highResData = [];
 	let drawTimeout;
 
+	function getScreenCoordinates(coords,viewport) {
+		if(coords && viewport){
+			return viewport.project([coords[0]-2.5,coords[1]-2.5]);
+		}
+		else {
+			return [0,0];
+		}
+  	}
+
+
+	let screenCoordinates = [];
+	let mainViewport = null;
+	let boxes = [];
+
+  	function updateScreenCoordinates(viewport) {
+		screenCoordinates = renderedSublayers.map(d => ({
+			id:d.id,
+			screenPosition: getScreenCoordinates(d.coordinates,viewport),
+			screenWidth: (getScreenCoordinates([10,0],viewport)[0]-getScreenCoordinates([5,0],viewport)[0]),
+			info: d
+		}));
+
+		screenCoordinates.forEach(d => {
+			boxes.push([d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth])
+		})
+  	}
+
 	async function getData(bbox, id) {
   	// Stall for 20ms - simulate an async request
   		// await new Promise(resolve => setTimeout(resolve, 100));
@@ -310,10 +468,6 @@
 		}
 
 		return highResData
-	}
-
-	function showObject(object){
-		console.log(object);
 	}
 
 	onMount(async () => {
@@ -356,9 +510,6 @@
 		await makeIconLayers();
 		await makeTileLayer();
 
-		// layers = [];
-
-
 		const geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2xqc2g3N2o5MHAyMDNjdGhzM2V2cmR3NiJ9.3x1ManoY4deDkAGBuUMnSw',
 			types: 'region,postcode,district,place,neighborhood',
@@ -367,14 +518,13 @@
 			}
 		});
 		geocoder.addTo(inputBox)
-		// console.log(inputBox)
-
-		// inputBox.appendChild("#geocoder");
 
 		geocoder.on('result', async(e) => {
     		await sortImages(e);
 			rebuildGrid();
 		});
+
+		// let thing = await addRow(12312312333);
 
 		deckgl = new Deck({
 			parent: el,
@@ -385,9 +535,69 @@
 				transitionInterpolator: new LinearInterpolator(['zoom']),
 			    transitionDuration: 'auto'
 			},
+			// getTooltip: ({object}) => object && {
+			// 	html: `${object.name}`,
+			// 	style: {
+			// 	fontSize: '0.8em',
+			// 	padding: '5px',
+      		// 	}
+    		// },
+			onClick: ({x,y}) => {
+
+				let selected = screenCoordinates.filter(d => {
+					let box = [d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth];
+					return (box[0] < x && box[1] > x) && (box[2] < y && y < box[3])
+				})
+		
+				if(selected.length > 0){
+					console.log(selected[0].info)
+				}
+
+				// Query up to 5 overlapping objects under the pointer
+				// const pickInfo = deckgl.pickMultipleObjects({x, y, radius: 1, depth:5});
+				// console.log(pickInfo);
+			},
+
+
+			// pickable: true,
+			// onClick: (info, event) => console.log('Clicked:', info, event),
 			onViewStateChange: ({viewState}) => {
+
+				let width = viewportWidth;
+				let height = viewportHeight;
+
 				zoom = viewState.zoom;
-				console.log(zoom)
+				let viewport = new OrthographicView().makeViewport({width,height,viewState});
+
+				// const view = new OrthographicView(viewState.main);
+				// let viewportTwo = view.makeViewport({width, height, viewState})
+
+
+				updateScreenCoordinates(viewport);
+
+
+				// bitmapSublayers = [];
+
+				// const collectTileUrls = (layer) => {
+				// 	if (layer.props.data && layer.constructor.name == "_BitmapLayer") {
+				// 		// console.log(layer.props.data, layer.constructor.name)
+				// 		bitmapSublayers.push(layer.props.data[0]);
+				// 		if (layer.props.layers) {
+              	// 			layer.props.layers.forEach(collectTileUrls);
+			    //         }
+				// 	}		
+				// };
+
+				// // Collect tile URLs
+				// deckgl.layerManager.getLayers().forEach(collectTileUrls);
+
+				// // Collect BitmapLayer sublayers
+				// deckgl.layerManager.getLayers().forEach(collectBitmapSublayers);
+
+				// console.log('Bitmap Sublayers:', bitmapSublayers);
+
+				// deckgl.layerManager.getLayers()[1]
+				// console.log(zoom)
 				// let width = viewportWidth;
 				// let height = viewportHeight;
 				// const view = new OrthographicView(viewState.main);
@@ -426,7 +636,7 @@
 	}
 
 	async function rebuildGrid(){
-		console.log(spritePositionsMaster)
+		// console.log(spritePositionsMaster)
 		await assignDataToIconLayers()
 		await makeIconLayers();
 		await makeTileLayer();
@@ -451,8 +661,9 @@
 	function sortImages(locationData){
 		return new Promise((resolve, reject) => {
         	let ids = filterLocation(courtData,locationData,"bbox");
-			console.log(ids)
+			// console.log(ids)
 			spritePositionsMaster = makeMasterData(ids,courtData);
+			
 			resolve();
 		})
 	}
@@ -471,13 +682,55 @@
 		});
 	}
 
+	// function viewLayer(layer){
+	// 	console.log(layer)
+	// 	return "hi";
+	// }
+
+	function handleDragStart(event) {
+    	event.stopPropagation();
+		event.preventDefault();
+  	}
+
+
 </script>
 <!-- <svelte:component this={autofill} /> -->
-
-<div class="overlay">
+<div class="overlay" id="overlay">
 	<div bind:this={inputBox} id="geocoder" class="geocoder">
 	</div>
-	<button on:click={() => sortColor(courtData)}>sort</button>
+	<h1>{renderedSublayers.length}</h1>
+	
+	{#each screenCoordinates as layer (layer.info.id) }
+		<div
+			style="
+				position:absolute;
+				margin:0;
+				top:0;
+				pointer-events:none;
+				width:{layer.screenWidth}px;
+				height:{layer.screenWidth}px;
+				left:0;
+				font-size:24px;
+				transform: translate({layer.screenPosition[0]}px,{layer.screenPosition[1]}px);
+			"
+			class="overlay-test"
+		>
+			<div class="faves"
+				on:mousedown={handleDragStart}
+				on:touchstart={handleDragStart}		 
+				on:click={() => console.log("click")}
+				draggable="true"
+				style="
+					width:100%;
+					background: red;
+					height:20%;
+				"
+			>
+			</div>
+		</div>
+	{/each}
+
+	<!-- <button on:click={() => sortColor(courtData)}>sort</button> -->
 </div>
 
 <div class="el" bind:this={el}>
@@ -490,7 +743,23 @@
 		top: 0;
 		left: 0;
         z-index: 1000;
-		
+	}
+
+	.overlay-test {
+		pointer-events: none;
+		display: none;
+	}
+
+	.faves {
+		position: absolute;
+		bottom: 0;
+		right: 0;
+		background-color: black;
+		pointer-events: auto;
+	}
+
+	.faves svg {
+		width: 100%;
 	}
 
     .el {

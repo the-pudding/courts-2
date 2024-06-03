@@ -13,6 +13,10 @@ https://hyunbinseo.medium.com/get-images-dominant-color-and-palette-using-color-
 - when re-sizing to 128 for low-res imagesx , figure out if that is ruining the image or if figma is better when resizing
 - higher-res image finder (use image size from different services, or pixelate calculate)
 
+TILELAYER
+* CACHING AND ALL THE TILE GENERATION TOOLS THAT COME IN TILELAYER FOR **TILES** BUT IM NOT USING
+
+
 SEARCH/FILTER
 * center zoom, zoom out make sense???
 
