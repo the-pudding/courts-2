@@ -10,6 +10,12 @@
 	import {TileLayer} from '@deck.gl/geo-layers';
 	import { fade } from 'svelte/transition';
 	import {ClipExtension} from '@deck.gl/extensions';
+	
+	import Comment from "$components/Comment.svelte"
+
+	import {
+		isCommenting
+	} from "$stores/misc.js";
 
 	import {
 		readAll,
@@ -61,19 +67,22 @@
 		}
 	}
 
+	$: console.log($isCommenting);
+	let screenCoordinates = [];
 	let el;
 	let zoom = 3;
 	let deckgl;
 	let bounds;
 	let inputBox;
 	let spritePositionsMaster;
+	let commentId;
 	// $: bounds ? renderLayers() : null;
 
 	let width = 64;//2304;//128;
 	let height = 64;//2176;//128;
 	let spriteMap = {};
 
-	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+	let states = [0]//,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
 	let bitmapSublayers = [];
@@ -215,8 +224,10 @@
 		let tileLayer = new TileLayer({
 			tileSize: 256,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+			// visible: zoom > 5,
 			onViewportLoad: layers => {
 				// console.log(layers,"hi")
+				let oldLength = renderedSublayers.length;
 				renderedSublayers= Array.from(layers
 					.flatMap(obj => obj.content ? obj.content : [])
 					.reduce((map, item) => {
@@ -227,6 +238,15 @@
 					}, new Map())
 					.values())
 					;
+				if(oldLength == 0 && renderedSublayers.length > 0){
+					let width = viewportWidth;
+					let height = viewportHeight;
+
+					const viewState = deckgl.viewState;
+					let viewport = new OrthographicView().makeViewport({width,height,viewState});
+
+					updateScreenCoordinates(viewport);
+				}
     		},
 
 			// onClick: ((info, event) => {
@@ -271,7 +291,7 @@
 						];
 
 						let left = imageCoors[0]-2.5;
-						let bottom = imageCoors[1]+5-2.5;
+						let bottom = imageCoors[1]+5-2.4;
 						let right = imageCoors[0]+5-2.5;
 						let top = imageCoors[1]+2;
 
@@ -302,20 +322,24 @@
 							image: `assets/toolbar.jpg`,
 							id: `${props.id}_${imageId}_bitmap2`,
 							bounds: [[left, bottom], [left, top], [right, top], [right, bottom]],//[0,5,5,0]
+							visible: zoom > 5,
 						})
 
 						const TEXT_DATA = [
 							{
 								text: imageName,
-								position: [imageCoorsFinal[0]+.1, imageCoorsFinal[1]-.2],
-								color: [255, 255, 255],
-								size:.2
+								position: [imageCoorsFinal[0]+.1, imageCoorsFinal[1]-.19],
+								size:.33
 							},
 							{
 								text: "1",
-								position: [imageCoorsFinal[0]+5-.3, imageCoorsFinal[1]-.2],
-								color: [255, 255, 255],
-								size: .2
+								position: [imageCoorsFinal[0]+5-1.75, imageCoorsFinal[1]-.19],
+								size: .33
+							},
+							{
+								text: "1",
+								position: [imageCoorsFinal[0]+5-1, imageCoorsFinal[1]-.19],
+								size: .33
 							}
 						];
 
@@ -324,12 +348,13 @@
 							id: `TextLayer-${imageId}-${props.id}`,
 							getPosition: d => d.position,
 							getText: d => d.text,
-							characterSet: 'auto',
+							//characterSet: 'auto',
+							fontFamily: "-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif",
 							getAlignmentBaseline: 'center',
 							getColor: [255, 255, 255],
-							getSize: .3,
-							background: true,
-							getBackgroundColor: [0,0,0],
+							getSize: d => d.size,
+							// background: true,
+							// getBackgroundColor: [0,0,0],
 							getTextAnchor: 'start',
 							sizeUnits: 'common',
 						});
@@ -341,30 +366,10 @@
 							}
 						];
 
-						const iconLayerFave = new IconLayer(props, {
-							data: ICON_DATA,
-							coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-							id: `iconLayer-${imageId}-${props.id}`,
-							getPosition: d => d.position,
-							iconAtlas: 'assets/heart.png',
-							iconMapping: favesMapping,
-							getSize: .5,
-							getIcon: d => 'marker-warning',
-							// getColor: [255, 0, 0],
-							// mask: true,
-							// onHover: (info, event) => console.log('Hover:', info, event),
-							// onClick: (info, event) => console.log('Clicked:', info, event),
-							// alphaCutoff: 0,
-							// autoHighlight: true,
-							// autoHighlight: true,
-							sizeUnits: 'common',
-						});
 
 						layers.push(item);
 						layers.push(itemTwo);
-
 						layers.push(textLayer);
-						// layers.push(iconLayerFave);
 
 
 					}
@@ -431,21 +436,19 @@
   	}
 
 
-	let screenCoordinates = [];
-	let mainViewport = null;
-	let boxes = [];
-
   	function updateScreenCoordinates(viewport) {
-		screenCoordinates = renderedSublayers.map(d => ({
-			id:d.id,
-			screenPosition: getScreenCoordinates(d.coordinates,viewport),
-			screenWidth: (getScreenCoordinates([10,0],viewport)[0]-getScreenCoordinates([5,0],viewport)[0]),
-			info: d
-		}));
-
-		screenCoordinates.forEach(d => {
-			boxes.push([d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth])
-		})
+		screenCoordinates = renderedSublayers.map(d => {
+			let pos = getScreenCoordinates(d.coordinates,viewport);
+			let width = getScreenCoordinates([10,0],viewport)[0]-getScreenCoordinates([5,0],viewport)[0];
+			console.log(d.id,pos,width)
+			return {
+				id:d.id,
+				screenPosition: pos,
+				screenWidth: width,
+				info: d
+			}
+		});
+		console.log("updateScreenCoordinates",renderedSublayers.length,screenCoordinates.length)
   	}
 
 	async function getData(bbox, id) {
@@ -545,12 +548,42 @@
 			onClick: ({x,y}) => {
 
 				let selected = screenCoordinates.filter(d => {
+
 					let box = [d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth];
 					return (box[0] < x && box[1] > x) && (box[2] < y && y < box[3])
 				})
+
+				console.log(x,y,selected.length,screenCoordinates,renderedSublayers,selected)
+
+
+
 		
 				if(selected.length > 0){
-					console.log(selected[0].info)
+					let image = selected[0];
+
+					let rangeX = [image.screenPosition[0],image.screenPosition[0]+image.screenWidth];
+					let rangeY = [image.screenPosition[1],image.screenPosition[1]+image.screenWidth];
+					let xPercent = (x-image.screenPosition[0])/image.screenWidth;
+					let yPercent = (y-image.screenPosition[1])/image.screenWidth;
+
+
+					if(xPercent > .55 && yPercent > .89){
+						console.log("valid")
+						if(xPercent > .7){
+							if(xPercent > .84){
+								console.log("3d")
+							}
+							else {
+								$isCommenting = true;
+								console.log("comment",image)
+								commentId = image.info.id;
+							}
+						}
+						else {
+							addRow(image.info.id)
+							console.log("fave",image.info.id)
+						}
+					}
 				}
 
 				// Query up to 5 overlapping objects under the pointer
@@ -562,18 +595,21 @@
 			// pickable: true,
 			// onClick: (info, event) => console.log('Clicked:', info, event),
 			onViewStateChange: ({viewState}) => {
-
+				// currentViewState = deckgl.viewState;
+				// console.log(viewState,currentViewState)
+				zoom = viewState.zoom;
 				let width = viewportWidth;
 				let height = viewportHeight;
-
-				zoom = viewState.zoom;
 				let viewport = new OrthographicView().makeViewport({width,height,viewState});
+				updateScreenCoordinates(viewport);
+
+				deckgl.setProps({viewState});
+
 
 				// const view = new OrthographicView(viewState.main);
 				// let viewportTwo = view.makeViewport({width, height, viewState})
 
 
-				updateScreenCoordinates(viewport);
 
 
 				// bitmapSublayers = [];
@@ -696,6 +732,10 @@
 </script>
 <!-- <svelte:component this={autofill} /> -->
 <div class="overlay" id="overlay">
+	{#if $isCommenting == true}
+		<Comment {commentId} />
+	{/if}
+	
 	<div bind:this={inputBox} id="geocoder" class="geocoder">
 	</div>
 	<h1>{renderedSublayers.length}</h1>
@@ -721,9 +761,9 @@
 				on:click={() => console.log("click")}
 				draggable="true"
 				style="
-					width:100%;
+					width:10px;
 					background: red;
-					height:20%;
+					height:10px;
 				"
 			>
 			</div>
@@ -747,7 +787,6 @@
 
 	.overlay-test {
 		pointer-events: none;
-		display: none;
 	}
 
 	.faves {

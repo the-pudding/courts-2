@@ -7,6 +7,21 @@ console.log(supabaseUrl, supabaseAnonKey)
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export const addComment = async (courtId,comment) => {
+
+	const response = await supabase
+		.from('courts-comments')
+			.insert([{court_id: courtId,comment:comment}], { returning: "minimal" })
+			.select()
+
+		if (response.error) {
+			console.log(response.error);
+			throw new Error("insert failed");
+		}
+		return true;
+}
+
+
 export const addRow = async (criteria) => {
 
 		const response = await supabase
