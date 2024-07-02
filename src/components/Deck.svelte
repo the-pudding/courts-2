@@ -5,11 +5,12 @@
 	import filterLocation from '$actions/filterAddresses.js'
 	import colorSort from "$actions/colorSort.js";
 	import courtData from "$data/data.csv";//"$data/court_data.csv"
-	import {Deck, OrthographicView, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
+	import {Deck, OrthographicView, OrthographicViewport, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer, TextLayer} from '@deck.gl/layers';
 	import {TileLayer} from '@deck.gl/geo-layers';
 	import { fade } from 'svelte/transition';
 	import {ClipExtension} from '@deck.gl/extensions';
+	import ThreeD from "$components/ThreeD.svelte"
 	
 	import Comment from "$components/Comment.svelte"
 
@@ -22,8 +23,6 @@
 		countRows,
 		addRow
 	} from "$utils/supabase.js";
-
-
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 	import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
@@ -67,15 +66,17 @@
 		}
 	}
 
-	$: console.log($isCommenting);
+	$: console.log(commentNode);
 	let screenCoordinates = [];
 	let el;
 	let zoom = 3;
+	let targetDeck;
 	let deckgl;
 	let bounds;
 	let inputBox;
 	let spritePositionsMaster;
 	let commentId;
+	let commentNode;
 	// $: bounds ? renderLayers() : null;
 
 	let width = 64;//2304;//128;
@@ -88,11 +89,17 @@
 	let bitmapSublayers = [];
 	let renderedSublayers = [];
 
-	$: console.log(zoom)
+	let courtsWithFavorites = {}
+	let courtsFaveCount = [0];
+
+	// $: console.log(zoom)
 
 	// $: console.log(screenCoordinates)
 
 	function makeMasterData(toFilter,data){
+
+		let courtFaves = Object.keys(courtsWithFavorites);
+
 		let spritePositionsMaster;
 
 		if(toFilter.length > 0){
@@ -106,9 +113,26 @@
 
 		let squareSize = Math.floor(Math.sqrt(spritePositionsMaster.length));
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
+
+
+			let faves = 0;
+			let id = d.id.replace(".jpg","");
+			if(courtFaves.indexOf(id) > -1){
+				faves = courtsWithFavorites[id];
+			}
 			let x = (i % squareSize) * 5 + (i % squareSize)*.1// + Math.random()*1;
 			let y = Math.floor(i/squareSize) * 5 + Math.floor(i/squareSize)*1*.1// + Math.random() * 1;
-			return {"coordinates":[x,y], id:d.id.replace(".jpg",""),location:d.location, state:d.state, geo:d.geo,squareSize:squareSize};
+			return {
+				"coordinates":[x,y],
+				id:id,
+				latLong: d.center.split(",").map(d => +d),
+				location:d.location,
+				state:d.state,
+				geo:d.geo,
+				squareSize:squareSize,
+				likes:faves,
+				comments:0
+			};
 		});
 
 		return spritePositionsMaster;
@@ -223,6 +247,7 @@
 
 		let tileLayer = new TileLayer({
 			tileSize: 256,
+			id:`tileLayer_`,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
 			// visible: zoom > 5,
 			onViewportLoad: layers => {
@@ -239,26 +264,47 @@
 					.values())
 					;
 				if(oldLength == 0 && renderedSublayers.length > 0){
-					let width = viewportWidth;
-					let height = viewportHeight;
 
-					const viewState = deckgl.viewState;
-					let viewport = new OrthographicView().makeViewport({width,height,viewState});
+					// deckgl.redraw();
+		
+					const width = viewportWidth; // Width of the viewport
+					const height = viewportHeight; // Height of the viewport
+					const target = [targetDeck[0], targetDeck[1], 0]; // Target point [x, y, z]
+
+					// Calculate the bounds
+					const left = -width / 2;
+					const right = width / 2;
+					const top = height / 2;
+					const bottom = -height / 2;
+
+					// Create the orthographic view
+					const viewport = new OrthographicViewport({
+						width,
+						height,
+						left,
+						right,
+						top,
+						bottom,
+						target,
+						zoom
+					});
 
 					updateScreenCoordinates(viewport);
 				}
     		},
-
-			// onClick: ((info, event) => {
-			// 					console.log(info)
-			// 				}),
-
-			// pickable:true,
-			getTileData: async ({id, bbox}) => {
+			getTileData: async ({id, bbox,signal}) => {
 				if(zoom < 5){
 					return null;
 				}
+				if (signal.aborted) {
+    				return null;
+  				}
 				return getData(bbox, id);
+			},
+			updateTriggers: {
+				renderSubLayers: courtsFaveCount,
+				getTileData:courtsFaveCount,
+				all:courtsFaveCount,
 			},
 			renderSubLayers: props => {
 
@@ -270,14 +316,13 @@
 				]
 
 				if(props.data && props.data.length > 0){
-					// console.log("rendering sublayers",props);
 
-					
-					
 					for (let image in props.data){
 						// console.log(props)
 						props.data[image].tileId = props.id;
 						// renderedSublayers.push(props.data[image]);
+						let likes = JSON.stringify(props.data[image].likes);
+						let comments = JSON.stringify(props.data[image].comments);
 						let imageId = props.data[image].id;
 						let imageCoors = props.data[image].coordinates;
 						let imageName = `${props.data[image].location}, ${props.data[image].state}`;
@@ -291,10 +336,15 @@
 						];
 
 						let left = imageCoors[0]-2.5;
-						let bottom = imageCoors[1]+5-2.4;
+						let bottom = imageCoors[1]+5-2.5;
 						let right = imageCoors[0]+5-2.5;
-						let top = imageCoors[1]+2;
+						let top = imageCoors[1]+1;
 
+
+						left = imageCoors[0]-2.5;
+						bottom = imageCoors[1]+5-2.5;
+						right = imageCoors[0]+5-2.5;
+						top = imageCoors[1]-2.5;
 						//Coordinates of the bounding box of the bitmap [left, bottom, right, top]
 						//Coordinates of four corners of the bitmap, should follow the sequence of 
 						//[[left, bottom], [left, top], [right, top], [right, bottom]]. 
@@ -319,7 +369,7 @@
 						})
 
 						const itemTwo = new BitmapLayer(props,{
-							image: `assets/toolbar.jpg`,
+							image: `assets/toolbar-3.png`,
 							id: `${props.id}_${imageId}_bitmap2`,
 							bounds: [[left, bottom], [left, top], [right, top], [right, bottom]],//[0,5,5,0]
 							visible: zoom > 5,
@@ -332,13 +382,13 @@
 								size:.33
 							},
 							{
-								text: "1",
-								position: [imageCoorsFinal[0]+5-1.75, imageCoorsFinal[1]-.19],
+								text: comments,
+								position: [imageCoorsFinal[0]+5-.45, imageCoorsFinal[1]-.93],
 								size: .33
 							},
 							{
-								text: "1",
-								position: [imageCoorsFinal[0]+5-1, imageCoorsFinal[1]-.19],
+								text: likes,
+								position: [imageCoorsFinal[0]+5-.45, imageCoorsFinal[1]-.31],
 								size: .33
 							}
 						];
@@ -347,7 +397,10 @@
 							data: TEXT_DATA,
 							id: `TextLayer-${imageId}-${props.id}`,
 							getPosition: d => d.position,
-							getText: d => d.text,
+							getText: d => {
+								return d.text;
+								return JSON.stringify(courtsFaveCount[0])//'d.text,
+							},	
 							//characterSet: 'auto',
 							fontFamily: "-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif",
 							getAlignmentBaseline: 'center',
@@ -357,6 +410,9 @@
 							// getBackgroundColor: [0,0,0],
 							getTextAnchor: 'start',
 							sizeUnits: 'common',
+							updateTriggers: {
+								getText: courtsFaveCount
+							}
 						});
 
 						const ICON_DATA = [
@@ -390,10 +446,6 @@
 
 				return layers
 			},
-			// onClick: (info, event) => console.log('Clicked:', info, event),
-			// alphaCutoff: 0,
-			// autoHighlight: true,
-
 		})
 		layers.push(tileLayer)	
 	}
@@ -440,7 +492,6 @@
 		screenCoordinates = renderedSublayers.map(d => {
 			let pos = getScreenCoordinates(d.coordinates,viewport);
 			let width = getScreenCoordinates([10,0],viewport)[0]-getScreenCoordinates([5,0],viewport)[0];
-			console.log(d.id,pos,width)
 			return {
 				id:d.id,
 				screenPosition: pos,
@@ -448,7 +499,7 @@
 				info: d
 			}
 		});
-		console.log("updateScreenCoordinates",renderedSublayers.length,screenCoordinates.length)
+		// console.log("updateScreenCoordinates",renderedSublayers.length,screenCoordinates.length)
   	}
 
 	async function getData(bbox, id) {
@@ -484,7 +535,6 @@
 					'useLocalLibraries':true,
 					'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
 				},
-
 			worker: true,  // Enable workers globally for all loaders
 		// 	'workerUrl':"libs-2/basis-worker.js",//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
 			'CDN':false,
@@ -555,9 +605,6 @@
 
 				console.log(x,y,selected.length,screenCoordinates,renderedSublayers,selected)
 
-
-
-		
 				if(selected.length > 0){
 					let image = selected[0];
 
@@ -566,23 +613,28 @@
 					let xPercent = (x-image.screenPosition[0])/image.screenWidth;
 					let yPercent = (y-image.screenPosition[1])/image.screenWidth;
 
-
-					if(xPercent > .55 && yPercent > .89){
+					console.log(xPercent,yPercent)
+					if(xPercent > .79){
 						console.log("valid")
-						if(xPercent > .7){
-							if(xPercent > .84){
-								console.log("3d")
-							}
-							else {
-								$isCommenting = true;
-								console.log("comment",image)
-								commentId = image.info.id;
-							}
+						if(yPercent > .89){
+							console.log("heart")
+							console.log(image)
+							updateFromHeartClick(image.id);
+							
+							// else {
+							// 	// commentId = image.info.id;
+							// 	// commentNode = image.info.latLong;
+							// 	// $isCommenting = true;
+							// }
 						}
-						else {
-							addRow(image.info.id)
-							console.log("fave",image.info.id)
+						else if(yPercent > .75){
+							console.log("comment")
 						}
+
+						// else {
+						// 	addRow(image.info.id)
+						// 	console.log("fave",image.info.id)
+						// }
 					}
 				}
 
@@ -598,6 +650,9 @@
 				// currentViewState = deckgl.viewState;
 				// console.log(viewState,currentViewState)
 				zoom = viewState.zoom;
+				targetDeck = viewState.target;
+				// console.log(viewState);
+
 				let width = viewportWidth;
 				let height = viewportHeight;
 				let viewport = new OrthographicView().makeViewport({width,height,viewState});
@@ -671,6 +726,27 @@
 		})
 	}
 
+
+	async function updateFromHeartClick(id){
+		// deckgl.setProps({
+		// 	layers: []
+		// });
+		
+		courtsWithFavorites[id] = (courtsWithFavorites[id] || 0) + 1;
+		courtsFaveCount = [courtsFaveCount[0] + 1];
+		courtsFaveCount = [...courtsFaveCount]
+
+		spritePositionsMaster = await makeMasterData([],courtData);
+		await makeIconLayers();
+		await makeTileLayer();
+
+		deckgl.setProps({
+			layers: layers
+		});
+
+
+	}
+
 	async function rebuildGrid(){
 		// console.log(spritePositionsMaster)
 		await assignDataToIconLayers()
@@ -730,7 +806,13 @@
 
 
 </script>
-<!-- <svelte:component this={autofill} /> -->
+{#if $isCommenting == true}
+	<div class="three-d">
+		<ThreeD coords={commentNode}/>
+	</div>
+{/if}
+
+
 <div class="overlay" id="overlay">
 	{#if $isCommenting == true}
 		<Comment {commentId} />
@@ -777,7 +859,12 @@
 </div>
 
 <style>
-	
+	.three-d {
+		width: 100%;
+		height: 100vh;
+		position: fixed;
+		z-index: 1000000000;
+	}
 	.overlay {
 		position: fixed;
 		top: 0;

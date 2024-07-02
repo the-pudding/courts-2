@@ -21,8 +21,8 @@ SEARCH/FILTER
 * center zoom, zoom out make sense???
 
 *LIKE
-
 *COMMENT
+- encode icons INTO the full-res iamge.
 
 *CITY/STATE
 - refactor textlayer to be on tile rather than on each image (using data accessor for all images in tile)
