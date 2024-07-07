@@ -49,7 +49,6 @@ input, textarea {
 	border: none;
 	font-family: var(--font-form, sans-serif);
 	font-size: inherit;
-	outline: 1px solid var(--color-border, ray);
 	padding: 8px;
 }
 

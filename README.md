@@ -1,6 +1,11 @@
+#must
+- remove "sorry we don't have an image"
+
 *SPEED
 Chunk Basis files so loads with part of them working
 Remove so many images from loading in tilelayer
+Use Cullrect on deckgl?
+Load only first basis file and then others later.
 
 IMAGE ATTRIBUTES
 -#color sort
@@ -23,6 +28,7 @@ SEARCH/FILTER
 *LIKE
 *COMMENT
 - encode icons INTO the full-res iamge.
+- animation of fave into full screen thank you!
 
 *CITY/STATE
 - refactor textlayer to be on tile rather than on each image (using data accessor for all images in tile)
