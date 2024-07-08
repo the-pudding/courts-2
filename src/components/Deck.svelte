@@ -1,14 +1,13 @@
 <script>
-	import { getContext, onMount } from "svelte";
-	import { range, sort, easeCubic, scaleLinear, index } from "d3";
-
+	import { onMount } from "svelte";
+	import { easeCubic, index, format } from "d3";
 	import filterLocation from '$actions/filterAddresses.js'
 	import colorSort from "$actions/colorSort.js";
 	import courtData from "$data/data.csv";
 	import {Deck, OrthographicView, OrthographicViewport, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer, TextLayer} from '@deck.gl/layers';
 	import {TileLayer} from '@deck.gl/geo-layers';
-	import { fade, fly } from 'svelte/transition';
+	import { fly } from 'svelte/transition';
 	import ThreeD from "$components/ThreeD.svelte"
 	
 	import Comment from "$components/Comment.svelte"
@@ -34,21 +33,25 @@
 	} from '@loaders.gl/textures';
 
 	$: console.log(commentNode);
+	let formatComma = format(",");
 	let screenCoordinates = [];
 	let el;
 	let zoom = 3;
 	let targetDeck;
 	let deckgl;
 	let dummy;
+	let favoritedCourt;
 	let bounds;
 	let inputBox;
 	let spritePositionsMaster;
 	let commentId;
 	let commentNode;
+	let filteredIds = [];
 	let threeDId;
 	let deckAdded;
 	let threeDNode;
 	let texturesLoaded;
+	let favoriteActive = false;
 
 	let width = 64;//2304;//128;
 	let height = 64;//2176;//128;
@@ -87,7 +90,6 @@
 		let squareSize = Math.floor(Math.sqrt(spritePositionsMaster.length));
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 
-
 			let faves = 0;
 			let comments = 0;
 			let id = d.id.replace(".jpg","");
@@ -112,6 +114,7 @@
 			return {
 				"coordinates":[x,y],
 				id:id,
+				court_count: i,
 				latLong: d.center.split(",").map(d => +d),
 				location:d.location,
 				state:d.state,
@@ -225,6 +228,7 @@
 	async function assignDataToIconLayers(){
 		for (let layer in layerProps){
 			let dataTobind = spritePositionsMaster.filter(d => d.geo == states[layer]);
+			console.log(dataTobind)
 			layerProps[layer].data = dataTobind;
 		}
 		return true;
@@ -585,7 +589,7 @@
 					if(xPercent > .79){
 						console.log("valid")
 						if(yPercent > .89){
-							updateFromHeartClick(image.id);							
+							updateFromHeartClick(image.id,image);							
 						}
 						else if(yPercent > .75){
 							console.log("comment")
@@ -643,18 +647,27 @@
 	}
 
 
-	async function updateFromHeartClick(id){
+	async function updateFromHeartClick(id,image){
+		console.log(image)
 		courtsWithFavorites[id] = (courtsWithFavorites[id] || 0) + 1;
 		courtsFaveCount = [courtsFaveCount[0] + 1];
-		courtsFaveCount = [...courtsFaveCount]
+		courtsFaveCount = [...courtsFaveCount];
 
-		spritePositionsMaster = await makeMasterData([],courtData);
+		favoritedCourt = `#${formatComma(image.info.court_count)} in ${image.info.location}, ${image.info.state}`
+
+		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
 		await makeIconLayers();
 		await makeTileLayer();
 
 		deckgl.setProps({
 			layers: layers
 		});
+
+		favoriteActive = true;
+
+		setTimeout(() => {
+			favoriteActive = false;
+		},5000)
 	}
 
 	async function updateFromCommentClick(id){
@@ -669,7 +682,7 @@
 		courtsFaveCount = [courtsFaveCount[0] + 1];
 		courtsFaveCount = [...courtsFaveCount]
 
-		spritePositionsMaster = await makeMasterData([],courtData);
+		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
 		await makeIconLayers();
 		await makeTileLayer();
 
@@ -679,33 +692,44 @@
 	}
 
 	async function rebuildGrid(){
+		console.log("rebulding grid")
 		await assignDataToIconLayers()
 		await makeIconLayers();
 		await makeTileLayer();
 
-		if(zoom == -1.5){
-			deckgl.setProps({
-				layers: layers
-			});	
-		}
-		else {
-			await zoomTo(-1.5);
-			deckgl.setProps({
-				layers: layers
-			});
-			setTimeout(()=> {
-				zoomTo(2.8);
-			},1000)
-		}
+		deckgl.setProps({
+			layers: layers
+		});
+
+
+		// if(zoom == -1.5){
+		// 	deckgl.setProps({
+		// 		layers: layers
+		// 	});	
+		// }
+		// else {
+		// 	await zoomTo(-1.5);
+		// 	// await zoomTo(2.8)
+		// 	deckgl.setProps({
+		// 		layers: layers
+		// 	});
+
+		// 	setTimeout(()=> {
+		// 		zoomTo(2.8);
+		// 	},2000)
+		// }
 	}
 
 
 	function sortImages(locationData){
 		return new Promise((resolve, reject) => {
-        	let ids = filterLocation(courtData,locationData,"bbox");
-			// console.log(ids)
+        	filteredIds = filterLocation(courtData,locationData,"bbox");
+			if(filteredIds.length == 0){
+				filteredIds = ["none"]
+			}
+			console.log(ids)
 			spritePositionsMaster = makeMasterData(ids,courtData);
-			
+			console.log(spritePositionsMaster)
 			resolve();
 		})
 	}
@@ -742,7 +766,7 @@
 	</div>
 {/if}
 
-<div class="loading-overlay">
+<div class="loading-overlay" style="display:{deckAdded ? "none" : ''};">
 	{#if supaBaseData}
 		<p>Supabase Loaded</p>
 	{/if}
@@ -812,7 +836,73 @@
 <div class="el" bind:this={el}>
 </div>
 
+<div class="favorite-text" class:favoriteActive>
+	{#key favoritedCourt}
+		<p in:fly={{duration:1000,y:20,delay:0}}>Like Added to Court {favoritedCourt}</p>
+	{/key}
+</div>
+
+{#if spritePositionsMaster}
+	<div class="search-results">
+		<p>{formatComma(spritePositionsMaster.length)} courts</p>
+	</div>
+{/if}
+
+
+
 <style>
+	.search-results {
+		position: absolute;
+		top: 0;
+		left: 0;
+		z-index: 10000;
+		pointer-events: none;
+		text-align: center;
+		color: white;
+		margin: 0 auto;
+		width: 100%;
+		height:	100%;
+	}
+	.search-results p {
+		color: white;
+		font-family: var(--sans);
+	}
+	.favorite-text {
+		position: absolute;
+		top: 0;
+		left: 0;
+		z-index: 1000;
+		background-color: rgba(0,0,0,.8);
+		width: 100%;
+		height: 100%;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.favorite-text p {
+		font-family: var(--sans);
+		color: white;
+		text-align: center;
+		position: absolute;
+		top: 50%;
+		left: 0;
+		right: 0;
+		transform: translate(0,-50%);
+		margin: 0 auto;
+	}
+
+	.favoriteActive {
+		animation: fadeInOut;
+		animation-duration: 4s;
+	}
+
+	@keyframes fadeInOut {
+		0% {opacity: 0;}
+		10% {opacity: 1;}
+		80% {opacity: 1;}
+		100% {opacity: 0;}
+	}
+
 	.loading-overlay {
 		position: absolute;
 		top: 0;
