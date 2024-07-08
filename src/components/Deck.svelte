@@ -36,7 +36,7 @@
 	let formatComma = format(",");
 	let screenCoordinates = [];
 	let el;
-	let zoom = 3;
+	let zoom = -1.5;
 	let targetDeck;
 	let deckgl;
 	let dummy;
@@ -58,7 +58,7 @@
 	let spriteMap = {};
 	let supaBaseData;
 	let geoCoderAdded;
-	let states = [0]//,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
 	let bitmapSublayers = [];
@@ -194,6 +194,70 @@
 		})
 
 	}
+    
+	let fetchedChunks = 0;
+	let totalChunks = states.length-1;
+	let firstTileLayer;
+	let chunk;
+
+	async function loadChunks() {
+      while ((chunk = await fetchNextChunk())) {
+        // dataChunks.push(chunk);
+        await makeIconLayers();
+		// await makeTileLayer();
+		layers.push(firstTileLayer)
+
+		deckgl.setProps({
+			layers: layers
+		});
+      }
+    }
+
+	function fetchNextChunk(){
+		console.log("fetching new chunk")
+
+		if (fetchedChunks < totalChunks) {
+        	fetchedChunks++;
+			
+
+			return new Promise(async (resolve, reject) => {
+				let options = {
+					'basis': {
+						format: "etc1",//"astc-4x4",
+						'CDN':false,
+						'useLocalLibraries':true,
+						'workerUrl':"libs-2/basis-worker.js"//["libs/basis_encoder.js","libs/basis_encoder.wasm","libs/basis_encoder.wasm"]
+					},
+					'compressed-texture': {
+						useBasis: true,
+						'CDN':false,
+						'useLocalLibraries':true
+					},
+					'CDN':false,
+					'useLocalLibraries':true
+				}
+
+				console.log(fetchedChunks)
+
+				await load(`assets/${fetchedChunks}.basis`).then((result) => {
+					console.log("basis loaded ",fetchedChunks)
+					const image = result[0]//.filter((d,i) => i < 1);
+					let texture = {
+						data: image,
+						width: 4096,
+						height: 4096,
+						compressed: true,
+					}
+
+					layerProps[fetchedChunks].iconAtlas = texture;
+					console.log(layerProps)
+					resolve(true);
+				});
+			})
+		} else {
+        	return null;
+      	}
+	}
 
 	async function makeIconLayersProps(){
 		for (let state of states){
@@ -202,9 +266,6 @@
 				getIcon: d => d.id,
 				getPosition: d => d.coordinates,
 				getSize: 5,
-				// onHover: (info, event) => console.log('Hover:', info, event),
-				// onClick: (info, event) => console.log('Clicked:', info, event),
-				// pickable: true,
 				sizeUnits: 'common',
 				iconMapping: spriteMap[state],
 				transitions: {
@@ -218,9 +279,11 @@
 
 		await preloadBasisLoader()//.then(async() => {
 		dummy = true;
-		await Promise.all(states.map(async d => {
+
+		await Promise.all(states.slice(0,1).map(async d => {
 			await getTexture(d);
         }))
+
 		texturesLoaded = true;
 		return true;
 	}
@@ -439,12 +502,14 @@
 				return layers
 			},
 		})
-		layers.push(tileLayer)	
+
+		firstTileLayer = tileLayer;
+		layers.push(tileLayer)
 	}
 
 	async function makeIconLayers(){
 		layers = [];
-		for (let layer in layerProps){
+		for (let layer in layerProps.slice(0,fetchedChunks+1)){
 			let iconLayer = new IconLayer({
 				...layerProps[layer]
 			})
@@ -540,10 +605,14 @@
 		spritePositionsMaster = await makeMasterData([],courtData);
 		console.log("sprite positions loaded")
 		spriteMap = await makeSpriteObject();
+
+
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
 		await makeIconLayers();
 		await makeTileLayer();
+
+		console.log(layers)
 
 		const geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2x5YzVlcXZ4MW1qajJsb3RoeWI0bzhmZyJ9.DY653tAkLZCDMMEPuFvoGA',
@@ -605,6 +674,7 @@
 			},
 			onLoad: () => {
 				deckAdded = true;
+				loadChunks();
 			},
 			onViewStateChange: ({viewState}) => {
 				// currentViewState = deckgl.viewState;
@@ -727,8 +797,7 @@
 			if(filteredIds.length == 0){
 				filteredIds = ["none"]
 			}
-			console.log(ids)
-			spritePositionsMaster = makeMasterData(ids,courtData);
+			spritePositionsMaster = makeMasterData(filteredIds,courtData);
 			console.log(spritePositionsMaster)
 			resolve();
 		})

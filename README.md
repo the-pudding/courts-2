@@ -1,11 +1,6 @@
-#must
-- remove "sorry we don't have an image"
-
 *SPEED
-Chunk Basis files so loads with part of them working
 Remove so many images from loading in tilelayer
 Use Cullrect on deckgl?
-Load only first basis file and then others later.
 
 IMAGE ATTRIBUTES
 -#color sort
@@ -15,7 +10,6 @@ https://hyunbinseo.medium.com/get-images-dominant-color-and-palette-using-color-
 
 *IMAGE QUALITY
 - figure out the pixel size of low-res images and use that size rather than the 1000x1000
-- when re-sizing to 128 for low-res imagesx , figure out if that is ruining the image or if figma is better when resizing
 - higher-res image finder (use image size from different services, or pixelate calculate)
 
 TILELAYER
@@ -28,7 +22,6 @@ SEARCH/FILTER
 *LIKE
 *COMMENT
 - encode icons INTO the full-res iamge.
-- animation of fave into full screen thank you!
 
 *CITY/STATE
 - refactor textlayer to be on tile rather than on each image (using data accessor for all images in tile)
