@@ -1,6 +1,7 @@
 *SPEED
 Remove so many images from loading in tilelayer
 Use Cullrect on deckgl?
+use iconatlas on main layer merge images in sharp
 
 IMAGE ATTRIBUTES
 -#color sort

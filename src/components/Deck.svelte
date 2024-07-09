@@ -32,11 +32,13 @@
 		BasisLoader,
 	} from '@loaders.gl/textures';
 
-	$: console.log(commentNode);
+	
+	$: console.log(zoom)
 	let formatComma = format(",");
 	let screenCoordinates = [];
 	let el;
 	let zoom = -1.5;
+	let tileLayerZoom = 3.9;
 	let targetDeck;
 	let deckgl;
 	let dummy;
@@ -138,6 +140,7 @@
 				return d.geo == state;
 			})
 
+
 			const spriteObject = {};
 
 			for (let row of spriteMap) {
@@ -198,19 +201,135 @@
 	let fetchedChunks = 0;
 	let totalChunks = states.length-1;
 	let firstTileLayer;
+	let iconAtlasLayer;
+	let textLayer;
+	
 	let chunk;
+
+	async function loadTestIconAtlas(){
+		let iconMapping = {
+			"marker": {
+				width: 1500,
+				height: 1510,
+				x:0,
+				y:0,
+				mask:false
+			}
+		};
+
+		let props = {
+			id: `IconLayer_test`,
+			getIcon: d => "marker",
+			data: spritePositionsMaster,
+			getPosition: d => d.coordinates,
+			getSize: 5,
+			sizeUnits: 'common',
+			iconMapping: iconMapping,
+			iconAtlas:`assets/toolbar-3.png`,
+			transitions: {
+				getPosition: {
+					duration: 1000,
+				}
+			}
+		};
+
+		iconAtlasLayer = new IconLayer({
+			...props
+		})
+
+		// layers.push(iconLayer)
+
+	}
+
+	async function makeTextData() {
+
+		let textData = [];
+
+		for (let item of spritePositionsMaster){
+
+
+
+			let likes = JSON.stringify(item.likes);
+			let comments = JSON.stringify(item.comments);
+			
+			if(+item.id == 22148967){
+				console.log(item)
+			}
+
+			textData.push({
+				text: `${item.location}, ${item.state}`,
+				position: [item.coordinates[0]-2.4, item.coordinates[1]+2.2],
+				size:.4
+			})
+
+			textData.push({
+				text: likes,
+				position: [item.coordinates[0]-2.5+5-.45, item.coordinates[1]+2.5-.31],
+				size:.33
+			})
+
+			textData.push({
+				text: comments,
+				position: [item.coordinates[0]-2.5+5-.45, item.coordinates[1]+2.5-.93],
+				size:.33
+			})
+		}
+
+		return textData;
+	}
+
+	async function loadText(){
+
+		let textData = await makeTextData();
+
+		textLayer = new TextLayer({
+			data: textData,
+			id: `TextLayer-test`,
+			getPosition: d => d.position,
+			getText: d => {
+				return d.text;
+			},
+			// fontSettings: {
+			// 	sdf:true
+			// },
+			maxWidth: 10,
+			// outlineWidth: 15,
+			// background: true,
+			// backgroundColor: [0,0,0],
+			// outlineColor: [0,0,0],
+			getAlignmentBaseline: 'top',
+			fontFamily: "-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif",
+			getAlignmentBaseline: 'center',
+			getColor: [255, 255, 255],
+			getSize: d => d.size,
+			getTextAnchor: 'start',
+			sizeUnits: 'common',
+			updateTriggers: {
+				getText: courtsFaveCount
+			}
+		});
+
+		// layers.push(textLayer)
+
+	}
 
 	async function loadChunks() {
       while ((chunk = await fetchNextChunk())) {
-        // dataChunks.push(chunk);
-        await makeIconLayers();
-		// await makeTileLayer();
-		layers.push(firstTileLayer)
-
+		makeIconLayers();
 		deckgl.setProps({
 			layers: layers
 		});
       }
+	  console.log("loading done")
+	  
+	  await makeTileLayer();
+	  await loadTestIconAtlas();
+	  await loadText();
+
+	  deckgl.setProps({
+	  	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+	  });
+
     }
 
 	function fetchNextChunk(){
@@ -250,7 +369,6 @@
 					}
 
 					layerProps[fetchedChunks].iconAtlas = texture;
-					console.log(layerProps)
 					resolve(true);
 				});
 			})
@@ -305,7 +423,7 @@
 			tileSize: 256,
 			id:`tileLayer_`,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-			// visible: zoom > 5,
+			// visible: zoom > 4.5,
 			onViewportLoad: layers => {
 				// console.log(layers,"hi")
 				let oldLength = renderedSublayers.length;
@@ -349,7 +467,7 @@
 				}
     		},
 			getTileData: async ({id, bbox,signal}) => {
-				if(zoom < 5){
+				if(zoom < tileLayerZoom){
 					return null;
 				}
 				if (signal.aborted) {
@@ -406,17 +524,20 @@
 						//[[left, bottom], [left, top], [right, top], [right, bottom]]. 
 
 
-						let imgType = "jpg";
-						// if(zoom > 6){
-						// 	imgType = "png";
-						// }
+						let imgType = "webp"
+						let imgSize = 150;
+						let imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imgSize}/${imageId}.${imgType}`
+						if(zoom > 5){
+							imgType = "jpg";
+							imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`
+						}
 
-
+						
 						const item = new BitmapLayer(props,{
-							image: `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`,
+							image: imgPath,
 							id: `${props.id}_${imageId}_bitmap`,
 							bounds: imageCoorsFinal,//[0,5,5,0]
-							visible: zoom > 5,
+							visible: zoom > tileLayerZoom,
 							// extensions: [new ClipExtension()],
 							// clipBounds: [left, bottom, right, top]
 							// pickable: false,
@@ -427,7 +548,7 @@
 							image: `assets/toolbar-3.png`,
 							id: `${props.id}_${imageId}_bitmap2`,
 							bounds: [[left, bottom], [left, top], [right, top], [right, bottom]],//[0,5,5,0]
-							visible: zoom > 5,
+							visible: zoom > tileLayerZoom,
 						})
 
 						const TEXT_DATA = [
@@ -465,6 +586,7 @@
 							// getBackgroundColor: [0,0,0],
 							getTextAnchor: 'start',
 							sizeUnits: 'common',
+							visible: zoom > tileLayerZoom,
 							// updateTriggers: {
 							// 	getText: courtsFaveCount
 							// }
@@ -478,9 +600,12 @@
 						];
 
 
-						layers.push(item);
-						layers.push(itemTwo);
-						layers.push(textLayer);
+						// if(zoom > 4.5){
+							layers.push(item);
+							// layers.push(itemTwo);
+						// }
+
+						// layers.push(textLayer);
 
 
 					}
@@ -504,7 +629,7 @@
 		})
 
 		firstTileLayer = tileLayer;
-		layers.push(tileLayer)
+		// layers.push(tileLayer)
 	}
 
 	async function makeIconLayers(){
@@ -605,12 +730,13 @@
 		spritePositionsMaster = await makeMasterData([],courtData);
 		console.log("sprite positions loaded")
 		spriteMap = await makeSpriteObject();
+		console.log(spriteMap)
 
 
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
 		await makeIconLayers();
-		await makeTileLayer();
+
 
 		console.log(layers)
 
@@ -726,11 +852,14 @@
 		favoritedCourt = `#${formatComma(image.info.court_count)} in ${image.info.location}, ${image.info.state}`
 
 		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
-		await makeIconLayers();
-		await makeTileLayer();
+		console.log(courtsWithFavorites)
 
+		// let textData = await makeTextData();
+		// textLayer.data = [...textData];
+		await loadText();
+		
 		deckgl.setProps({
-			layers: layers
+			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 		});
 
 		favoriteActive = true;
@@ -753,16 +882,15 @@
 		courtsFaveCount = [...courtsFaveCount]
 
 		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
-		await makeIconLayers();
-		await makeTileLayer();
 
+		await loadText();
+		
 		deckgl.setProps({
-			layers: layers
+			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 		});
 	}
 
 	async function rebuildGrid(){
-		console.log("rebulding grid")
 		await assignDataToIconLayers()
 		await makeIconLayers();
 		await makeTileLayer();
