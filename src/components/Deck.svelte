@@ -1035,7 +1035,7 @@
 
 <div class="favorite-text" class:favoriteActive>
 	{#key favoritedCourt}
-		<p in:fly={{duration:1000,y:20,delay:0}}>Like Added to Court {favoritedCourt}</p>
+		<p in:fly={{duration:500,y:20,delay:300}}>Like Added to Court {favoritedCourt}</p>
 	{/key}
 </div>
 
@@ -1090,7 +1090,7 @@
 
 	.favoriteActive {
 		animation: fadeInOut;
-		animation-duration: 4s;
+		animation-duration: 3s;
 	}
 
 	@keyframes fadeInOut {
