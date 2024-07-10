@@ -30,6 +30,7 @@
 
 	import {
 		BasisLoader,
+		selectSupportedBasisFormat
 	} from '@loaders.gl/textures';
 
 	
@@ -384,6 +385,7 @@
 				getIcon: d => d.id,
 				getPosition: d => d.coordinates,
 				getSize: 5,
+				mask:false,
 				sizeUnits: 'common',
 				iconMapping: spriteMap[state],
 				transitions: {
@@ -698,9 +700,11 @@
         	console.log(result);
     	})
 
+		let support = selectSupportedBasisFormat();
+
 		setLoaderOptions({
 			'basis': {
-					format: "etc1",//"astc-4x4",
+					format: support,//"astc-4x4",
 					maxConcurrency:1,
 					'CDN':false,
 					worker: true,  // Enable workers globally for all loaders
