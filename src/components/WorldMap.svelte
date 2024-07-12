@@ -1,7 +1,7 @@
 <script>
 
 
-    import {geoGraticule10, geoPath, geoOrthographic, scalePow, geoProjection, interpolateNumberArray} from "d3"
+    import {geoGraticule10, geoPath, geoOrthographic, scalePow, geoProjection, interpolateNumberArray, interpolateNumber} from "d3"
 	import { feature } from 'topojson-client';
     import { tweened } from "svelte/motion";
     import { Versor } from '$actions/Versor.js';
@@ -10,9 +10,11 @@
 
 	import shuffle from "$actions/shuffle.js";
 	import viewport from "../stores/viewport";
+	import { createEventDispatcher } from 'svelte';
 
+	const dispatch = createEventDispatcher();
 
-
+    export let sizes;
     export let geoJSON;
     export let courtData;
     export let viewportHeight;
@@ -20,6 +22,8 @@
 
     let dotScale = scalePow().domain([.2,1]).range([0,1]).exponent(10).clamp(true);
     
+    let rotateScale = scalePow().domain([0,1]).range([3,1]).exponent(.5).clamp(true);
+
     shuffle(courtData)
     
     let duration = 10000;
@@ -30,7 +34,7 @@
 
 	$: projection = geoOrthographic()
         .fitWidth(viewportHeight, sphere)
-		.rotate([110*$tween, -40*$tween])
+		.rotate([110*rotateScale($tween), -40])
         .translate([viewportWidth,viewportHeight])
         .scale(1000*(Math.max(($tween*1.5),.1)))
         .precision(0);
@@ -40,7 +44,7 @@
 	$: land = geoJSON ? feature(geoJSON, geoJSON.objects.land) : null;
 	
     let tween = tweened(0, {
-		duration: 10000,
+		duration: duration,
         easing: cubicInOut
 	});
 
@@ -56,7 +60,6 @@
     const projectionCart = geoProjection(cartesianProjection)
             .fitWidth(viewportWidth*2, sphere)
             .scale(1000)
-
 
     $: path = geoPath(projection).pointRadius(2);
 
@@ -77,19 +80,22 @@
                 path(land);
                 context.fill();
 
-
                 context.fillStyle = '#7d6a51'; // Color for the points
 
                 courtData.forEach((d,i) => {
-                    let interpolate = interpolateNumberArray(projection(newData[i]),d.coordinates)
+                    let interpolate = interpolateNumberArray(projection(newData[i]),d.coordinates.map(d => d*2))
+                    let interpolateSize = interpolateNumber(1.5/2,sizes.size*2)
+
                     let transitionVal = interpolate($cartTween);
+                    let sizeRect = interpolateSize($cartTween);
                     context.beginPath();
-                    context.arc(transitionVal[0], transitionVal[1], 1.5, 0, Math.PI * 2, true); // Draw a circle for each point
+                    context.rect(transitionVal[0], transitionVal[1], sizeRect, sizeRect)
+
+                    // context.arc(transitionVal[0], transitionVal[1], sizes.size, 0, Math.PI * 2, true); // Draw a circle for each point
                     context.fill();
                 });
             }
             else {
-
                 context.fillStyle = "rgba(12,12,11,1)"
                 context.beginPath();
                 path.context(context);
@@ -110,7 +116,6 @@
                 path.context(context);
                 path({type: "MultiPoint", coordinates: newData.slice(0,Math.floor(newData.length*(dotScale($tween))))});
                 context.fill();
-
             }
 
         }
@@ -121,6 +126,7 @@
     let context;
     let path1;
     let path2;
+    let introFinished;
 
     onMount(() => {
         context = canvas.getContext("2d");
@@ -129,7 +135,12 @@
             globeFinished = true;
             console.log("here")
 
-            cartTween.set(1)
+            cartTween.set(1).then(() => {
+                introFinished = true;
+                dispatch('finished', {
+			        text: 'Hello!'
+		        });
+            })
             
             render();
         });
@@ -139,11 +150,11 @@
     
 </script>
 {#if newData}
-    <div class="canvas-container">
+    <div class="canvas-container" class:introFinished>
         <canvas
             bind:this={canvas} 
             width={viewportWidth*2} height={viewportHeight*2}
-            style="width:{viewportWidth}px;height:{viewportHeight}px;opacity:{Math.max($tween,.2)};"
+            style="width:{viewportWidth}px;height:{viewportHeight}px;opacity:{Math.max($tween,1)};"
         >
         </canvas>
     </div>
@@ -166,6 +177,10 @@
         position: relative;
         width: 100%;
         height: 100%;
+        transition: opacity 1s;
+    }
+    .introFinished {
+        opacity: 0;
     }
     canvas {
         position: absolute;
