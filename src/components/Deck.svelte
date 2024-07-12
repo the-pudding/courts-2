@@ -8,6 +8,9 @@
 	import {IconLayer, BitmapLayer, TextLayer} from '@deck.gl/layers';
 	import {TileLayer} from '@deck.gl/geo-layers';
 	import { fly } from 'svelte/transition';
+	import WorldMap from "$components/WorldMap.svelte";
+    import { tweened } from "svelte/motion";
+
 	import ThreeD from "$components/ThreeD.svelte"
 	
 	import Comment from "$components/Comment.svelte"
@@ -61,11 +64,12 @@
 	let spriteMap = {};
 	let supaBaseData;
 	let geoCoderAdded;
-	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+	let states = [0]//,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
 	let bitmapSublayers = [];
 	let renderedSublayers = [];
+	let geoJSON;
 
 	let courtsWithFavorites = {}
 	let courtsWithComments = {};
@@ -206,6 +210,8 @@
 	let textLayer;
 	
 	let chunk;
+
+	
 
 	async function loadTestIconAtlas(){
 		let iconMapping = {
@@ -400,6 +406,12 @@
 		await preloadBasisLoader()//.then(async() => {
 		dummy = true;
 
+		if(!skipIntro){
+			countTween.set(1).then(() => {
+				countTweenFinished = true;
+			})
+		}
+		
 		await Promise.all(states.slice(0,1).map(async d => {
 			await getTexture(d);
         }))
@@ -416,7 +428,7 @@
 		}
 		return true;
 	}
-
+	let countTweenFinished;
 	let tilesLoaded = [];
 	
 	async function makeTileLayer(){
@@ -690,7 +702,19 @@
 		return highResData
 	}
 
+
+
 	onMount(async () => {
+
+
+		await new Promise(async(resolve, reject) => { 
+			const response = await fetch('assets/land-110m.json');
+			const data = await response.json();
+			resolve(data);
+		})
+		.then((result) => {						
+        	geoJSON = result;
+    	})
 
 		await new Promise(async(resolve, reject) => {    	
 			supaBaseData = index(await countFaves(), d => d.court_id);
@@ -734,15 +758,12 @@
 		spritePositionsMaster = await makeMasterData([],courtData);
 		console.log("sprite positions loaded")
 		spriteMap = await makeSpriteObject();
-		console.log(spriteMap)
+		
 
 
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
 		await makeIconLayers();
-
-
-		console.log(layers)
 
 		const geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2x5YzVlcXZ4MW1qajJsb3RoeWI0bzhmZyJ9.DY653tAkLZCDMMEPuFvoGA',
@@ -772,7 +793,6 @@
 			onClick: ({x,y}) => {
 
 				let selected = screenCoordinates.filter(d => {
-
 					let box = [d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth];
 					return (box[0] < x && box[1] > x) && (box[2] < y && y < box[3])
 				})
@@ -788,7 +808,7 @@
 					if(xPercent > .79){
 						console.log("valid")
 						if(yPercent > .89){
-							updateFromHeartClick(image.id,image);							
+							updateFromHeartClick(image.id,image,[x,y]);							
 						}
 						else if(yPercent > .75){
 							console.log("comment")
@@ -847,8 +867,13 @@
 	}
 
 
-	async function updateFromHeartClick(id,image){
-		console.log(image)
+	let heartCoors = [-100,-100];
+
+	async function updateFromHeartClick(id,image,coors){
+		console.log(image,coors)
+
+		heartCoors = coors;
+
 		courtsWithFavorites[id] = (courtsWithFavorites[id] || 0) + 1;
 		courtsFaveCount = [courtsFaveCount[0] + 1];
 		courtsFaveCount = [...courtsFaveCount];
@@ -954,8 +979,19 @@
 		event.preventDefault();
   	}
 
+	$: countTween = tweened(0, {
+		duration: 10000,
+	});
+
+	// $: if(dummy) {
+	// 	$countTween = 1
+	// }
+
+	let skipIntro = true;
 
 </script>
+
+
 
 {#if $isThreeD == true}
 	<div in:fly={{y:-20, duration:500}} class="three-d">
@@ -967,28 +1003,38 @@
 	</div>
 {/if}
 
-<div class="loading-overlay" style="display:{deckAdded ? "none" : ''};">
+
+{#if !skipIntro}
+<div class="loading-overlay" style="display:{deckAdded ? "" : ''};">
+
+	{#if geoJSON && spritePositionsMaster}
+		<div class="world-map">
+			<WorldMap {geoJSON} courtData={spritePositionsMaster} {viewportHeight} {viewportWidth}/>
+		</div>
+	{/if}
+
 	{#if supaBaseData}
-		<p>Supabase Loaded</p>
+		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
+		{#if !countTweenFinished}
+			<p transition:fly={{y:20, duration:1000, delay:0}} class="every">Loading Images of Every Basketball Court in America</p>
+			<p transition:fly={{y:20, duration:1000, delay:0}} style="opacity:{spritePositionsMaster ? 1 : 0};" class="count">{formatComma(Math.round($countTween*spritePositionsMaster?.length/100)*100)} courts</p>
+				<!-- <p style="opacity:{dummy ? 1 : 0};">Dummy Basis Loaded</p>
+				<p style="opacity:{texturesLoaded ? 1 : 0};">Textures Loaded</p>
+				<p style="opacity:{geoCoderAdded ? 1 : 0};">Geocoder Loaded</p>
+				<p style="opacity:{deckAdded ? 1 : 0};">Deck Added</p> -->
+		{/if}
+		</div>
 	{/if}
-	{#if spritePositionsMaster}
-		<p>Sprite Positions Loaded</p>
-	{/if}
-	{#if dummy}
-		<p>Dummy Basis Loaded</p>
- 	{/if}
 
-	{#if texturesLoaded}
-		<p>Textures Loaded</p>
-  	{/if}
+	{#if countTweenFinished}
+		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
+			<p class="every">Help us annotate American&rsquo;s Basketball</p>
+		</div>
+	{/if}
 
-	{#if geoCoderAdded}
-		<p>Geocoder Loaded</p>
-	{/if}
-	{#if deckAdded}
-		<p>Deck Added</p>
-	{/if}
+
 </div>
+{/if}
 
 
 <div class="overlay" id="overlay">
@@ -1034,10 +1080,16 @@
 	<!-- <button on:click={() => sortColor(courtData)}>sort</button> -->
 </div>
 
-<div class="el" bind:this={el}>
+<div style="" class="el" bind:this={el}>
 </div>
 
 <div class="favorite-text" class:favoriteActive>
+	{#key heartCoors}
+		<div class="heart-popup" style="left:{heartCoors[0]}px; top:{heartCoors[1]}px;">
+			hello
+		</div>
+	{/key}
+
 	{#key favoritedCourt}
 		<p in:fly={{duration:500,y:20,delay:300}}>Like Added to Court {favoritedCourt}</p>
 	{/key}
@@ -1045,13 +1097,52 @@
 
 {#if spritePositionsMaster}
 	<div class="search-results">
-		<p>{formatComma(spritePositionsMaster.length)} courts</p>
+		<!-- <p>{formatComma(spritePositionsMaster.length)} courts</p> -->
 	</div>
 {/if}
 
 
 
+
+
+
 <style>
+	.heart-popup {
+		position: absolute;
+	}
+	.every {
+		font-size: 24px;
+		font-family: var(--sans);
+	}
+
+	.loading-text {
+		position: absolute;
+		z-index: 100000;
+		display: flex;
+		width: 100%;
+		flex-direction: column;
+		justify-content: center;
+		height: 100%;
+	}
+
+	.loading-overlay p {
+		color: white;
+		text-align: center;
+		font-weight: 300;
+		font-family: var(--sans);
+		transition: opacity 1.5s;
+	}
+
+	.world-map {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 1000;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
 	.search-results {
 		position: absolute;
 		top: 0;
@@ -1109,7 +1200,6 @@
 		top: 0;
 		left: 0;
 		z-index: 1000;
-		background-color: red;
 		width: 100%;
 		height: 100%;
 	}

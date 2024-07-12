@@ -52,6 +52,7 @@
 		"@supabase/supabase-js": "^2.43.4",
 		"@turf/helpers": "^6.5.0",
 		"@turf/points-within-polygon": "^6.5.0",
-		"cesium": "^1.119.0"
+		"cesium": "^1.119.0",
+		"topojson-client": "^3.1.0"
 	}
 }
