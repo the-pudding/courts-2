@@ -1,19 +1,17 @@
 import { color, hsl } from "d3";
 
-let steps = 10;
+let steps = 3;
 
 
 function sets(data){
-
-
-
     const list = new Array(steps).fill().map(x => []);
     const splits = splitCircle(steps);
 
 
     data.forEach(c => {
-        let courtColor = `rgb(${c.color})`
-        let d = color(courtColor); 
+
+        let d = color(c.color.split(",")[0]);
+
         d = hsl(d); // {h: 207.27…, s: 0.44, l: 0.4902…, opacity: 1}
         let hue = d.h;
         let hueSet = withinSegment(splits, hue);
@@ -76,6 +74,7 @@ function byLightness(a, b){
 
 
 export default function colorSort(data) {
+    // console.log(data)
     let colorSet = sets2(data);
     return colorSet.flat(1);
 }

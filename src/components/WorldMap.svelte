@@ -80,12 +80,16 @@
                 path(land);
                 context.fill();
 
-                context.fillStyle = '#7d6a51'; // Color for the points
 
                 courtData.forEach((d,i) => {
+
                     let interpolate = interpolateNumberArray(projection(newData[i]),d.coordinates.map(d => d*2))
                     let interpolateSize = interpolateNumber(1.5/2,sizes.size*2)
 
+                    context.fillStyle = d.color.slice(0,7); // Color for the points
+
+                    // context.fillStyle = '#FF0000'; // Color for the points
+                    
                     let transitionVal = interpolate($cartTween);
                     let sizeRect = interpolateSize($cartTween);
                     context.beginPath();
@@ -94,6 +98,7 @@
                     // context.arc(transitionVal[0], transitionVal[1], sizes.size, 0, Math.PI * 2, true); // Draw a circle for each point
                     context.fill();
                 });
+                
             }
             else {
                 context.fillStyle = "rgba(12,12,11,1)"

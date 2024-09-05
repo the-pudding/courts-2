@@ -11,6 +11,9 @@
 	import WorldMap from "$components/WorldMap.svelte";
     import { tweened } from "svelte/motion";
 	import calcSquareSize from "$actions/getMaxSizeSquare.js"
+	import calcSquareSizeFiltered from "$actions/getMaxSizeSquareFiltered.js"
+
+
 
 	import ThreeD from "$components/ThreeD.svelte"
 	
@@ -39,6 +42,22 @@
 
 	
 	$: console.log(zoom)
+
+	let skipIntro = false;
+	let showEl = false;
+	let sizesFiltered;
+
+	let colors = [
+		"rgb(45, 181, 77)",
+		"rgb(66, 102, 235)",
+		"rgb(96, 216, 230)",
+		"rgb(168, 59, 157)",
+		"rgb(207, 21, 24)",
+		"rgb(225, 108, 51)",
+		"rgb(227, 198, 36)",
+		"rgb(235, 122, 184)"
+	]
+
 	let formatComma = format(",");
 	let screenCoordinates = [];
 	let el;
@@ -67,7 +86,7 @@
 	let spriteMap = {};
 	let supaBaseData;
 	let geoCoderAdded;
-	let states = [0]//,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
 	let bitmapSublayers = [];
@@ -86,8 +105,6 @@
 
 		let spritePositionsMaster;
 
-	
-
 		if(toFilter.length > 0){
 			spritePositionsMaster = data.filter(d => {
 				return toFilter.indexOf(d.id) > -1;
@@ -96,11 +113,11 @@
 		else {
 			spritePositionsMaster = data.map(d => d);
 		}
+		
+		sizesFiltered = calcSquareSizeFiltered(viewportWidth,viewportHeight,spritePositionsMaster.length,10);
 
-		let squareSize = Math.floor(Math.sqrt(spritePositionsMaster.length));
-		squareSize = sizes.rowSize;
-
-
+		let squareSize = sizesFiltered.rowSize;
+		console.log(sizesFiltered,sizes)
 
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 
@@ -128,6 +145,7 @@
 			return {
 				"coordinates":[x,y],
 				id:id,
+				color:d.color,
 				court_count: i,
 				latLong: d.center.split(",").map(d => +d),
 				location:d.location,
@@ -242,7 +260,7 @@
 			iconAtlas:`assets/toolbar-3.png`,
 			transitions: {
 				getPosition: {
-					duration: 1000,
+					duration: 500,
 				}
 			}
 		};
@@ -282,6 +300,8 @@
 				size:(.066*sizes.size)
 			})
 		}
+
+		console.log(textData)
 
 		return textData;
 	}
@@ -337,6 +357,10 @@
 	  deckgl.setProps({
 	  	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 	  });
+
+	//   setTimeout(() => {
+	// 	zoomTo(0);
+	//   },1000)
 
     }
 
@@ -397,7 +421,8 @@
 				iconMapping: spriteMap[state],
 				transitions: {
 					getPosition: {
-						duration: 1000,
+						duration: 750,
+      					easing: easeCubic
 					}
 				}
 			};
@@ -422,10 +447,12 @@
 	}
 	
 	async function assignDataToIconLayers(){
+		console.log(layerProps)
+
 		for (let layer in layerProps){
 			let dataTobind = spritePositionsMaster.filter(d => d.geo == states[layer]);
-			console.log(dataTobind)
 			layerProps[layer].data = dataTobind;
+			// layerProps[layer].getSize = sizes.size;
 		}
 		return true;
 	}
@@ -769,9 +796,15 @@
 			}
 		});
 		geocoder.addTo(inputBox)
+		geocoder.setPlaceholder("Search for a location...")
 
 		geocoder.on('result', async(e) => {
     		await sortImages(e);
+			rebuildGrid();
+		});
+
+		geocoder.on('clear', async(e) => {
+    		await sortImages(false);
 			rebuildGrid();
 		});
 
@@ -782,9 +815,9 @@
 			views: new OrthographicView(),
 		    initialViewState: { 
 				target: [viewportWidth/2, viewportHeight/2, 0],
-				zoom: zoom,
-				transitionInterpolator: new LinearInterpolator(['zoom']),
-			    transitionDuration: 'auto'
+				zoom: 1,
+				transitionInterpolator: new LinearInterpolator(['zoom','target']),
+			    transitionDuration: 1000
 			},
 			onClick: ({x,y}) => {
 				console.log(x,y)
@@ -835,7 +868,8 @@
 				let viewport = new OrthographicView().makeViewport({width,height,viewState});
 				updateScreenCoordinates(viewport);
 
-				deckgl.setProps({viewState});
+				//do i need this???
+				// deckgl.setProps({viewState});
   			},
 			controller: true,
 			layers: layers
@@ -844,22 +878,29 @@
 
 	function zoomTo(zoomLevel){
 		return new Promise((resolve, reject) => {
-			const interpolator = new LinearInterpolator(['zoom']);
+			console.log("zoomStart")
+			const interpolator = new LinearInterpolator({transitionProps:['zoom','target']});
 
 			deckgl.setProps({
 				views: new OrthographicView(),
 				initialViewState: {
-					target: [0, 0, 0],
+					target: [Math.floor(sizesFiltered.rowSize*sizes.size/2), Math.floor(spritePositionsMaster.length/sizesFiltered.rowSize)*sizes.size/2, 0],
 					zoom: zoomLevel,
 					controller: true,
 					transitionDuration: 1000,
 					transitionInterpolator: interpolator,
 					transitionEasing: easeCubic,
+					layers: layers,
 					onTransitionEnd: () => {
-						resolve();
+						// setTimeout(() => {
+						// 	console.log("zooming again")
+						// 	zoomTo(2);
+						// },1000)
+						// resolve();
 					}
 				},
 			});
+
 		})
 	}
 
@@ -915,42 +956,38 @@
 	}
 
 	async function rebuildGrid(){
+		let zoom = Math.log2(sizesFiltered.size / sizes.size);
+
+		zoomTo(zoom-.2);
+
 		await assignDataToIconLayers()
 		await makeIconLayers();
 		await makeTileLayer();
+		await loadTestIconAtlas();
+	  	await loadText();
 
 		deckgl.setProps({
-			layers: layers
+			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 		});
 
-
-		// if(zoom == -1.5){
-		// 	deckgl.setProps({
-		// 		layers: layers
-		// 	});	
-		// }
-		// else {
-		// 	await zoomTo(-1.5);
-		// 	// await zoomTo(2.8)
-		// 	deckgl.setProps({
-		// 		layers: layers
-		// 	});
-
-		// 	setTimeout(()=> {
-		// 		zoomTo(2.8);
-		// 	},2000)
-		// }
 	}
 
 
 	function sortImages(locationData){
 		return new Promise((resolve, reject) => {
-        	filteredIds = filterLocation(courtData,locationData,"bbox");
-			if(filteredIds.length == 0){
-				filteredIds = ["none"]
+			if(locationData){
+				filteredIds = filterLocation(courtData,locationData,"bbox");
+				if(filteredIds.length == 0){
+					filteredIds = ["none"]
+				}
 			}
+			else {
+				filteredIds = []
+			}
+
+			console.log(filteredIds);
+
 			spritePositionsMaster = makeMasterData(filteredIds,courtData);
-			console.log(spritePositionsMaster)
 			resolve();
 		})
 	}
@@ -978,15 +1015,13 @@
 		duration: 10000,
 	});
 
-	// $: if(dummy) {
-	// 	$countTween = 1
-	// }
-
-	let skipIntro = false;
-	let showEl = false;
+	function handleColorClick(color){
+		console.log("handle color", color)
+	}
 
 	function handleStartButtonClick() {
 		skipIntro = true;
+		zoomTo(3)
 	}
 
 	function handleWorldFinished() {
@@ -1021,8 +1056,8 @@
 	{#if supaBaseData}
 		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
 		{#if !countTweenFinished}
-			<p transition:fly={{y:20, duration:1000, delay:0}} class="every">Loading Images of Every Outdoor Basketball Court in America</p>
-			<p transition:fly={{y:20, duration:1000, delay:0}} style="opacity:{spritePositionsMaster ? 1 : 0};" class="count">{formatComma(Math.round($countTween*spritePositionsMaster?.length/100)*100)} courts</p>
+			<p transition:fly={{y:20, duration:1000, delay:0}} class="every">Loading Satellite Imagery of {formatComma(Math.round($countTween*spritePositionsMaster?.length/100)*100)} of {formatComma(spritePositionsMaster?.length)} Basketball Courts</p>
+			<!-- <p transition:fly={{y:20, duration:1000, delay:0}} style="opacity:{spritePositionsMaster ? 1 : 0};" class="count">{formatComma(Math.round($countTween*spritePositionsMaster?.length/100)*100)} courts</p> -->
 				<!-- <p style="opacity:{dummy ? 1 : 0};">Dummy Basis Loaded</p>
 				<p style="opacity:{texturesLoaded ? 1 : 0};">Textures Loaded</p>
 				<p style="opacity:{geoCoderAdded ? 1 : 0};">Geocoder Loaded</p>
@@ -1033,9 +1068,14 @@
 
 	{#if countTweenFinished}
 		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
-			<p class="every">Help us annotate America&rsquo;s Outdoor Basketball Courts</p>
+			<p class="every">
+				<span>Every Outdoor Basketball Court in the U.S.A.</span>
+			</p>	
+			<p class="every every-small">
+				<span>Explore by Panning and Zooming on 57,000 Courts</span>
+			</p>
 			<div class="start-button-container">
-				<button class="start-button" on:click={() => handleStartButtonClick()}>Explore</button>
+				<button class="start-button" on:click={() => handleStartButtonClick()}>Begin Exploring</button>
 			</div>	
 		</div>
 	{/if}
@@ -1049,10 +1089,6 @@
 	{#if $isCommenting == true}
 		<Comment {commentId} on:formSubmit={handleCommentSubmit} />
 	{/if}
-	
-	<div bind:this={inputBox} id="geocoder" class="geocoder">
-	</div>
-
 	<!-- <h1>{renderedSublayers.length}</h1> -->
 	
 	<!-- {#each screenCoordinates as layer (layer.info.id) }
@@ -1084,7 +1120,29 @@
 			</div>
 		</div>
 	{/each} -->
+</div>
 
+<div class="toolbar {skipIntro ? 'toolbar-visible' : ''}">
+	<div bind:this={inputBox} id="geocoder" class="geocoder">
+	</div>
+	<div class="color-finder">
+		<span>Filter Court Colors</span>
+		<div class="color-swatches">
+		{#each colors as color, i}
+			<button
+				on:click={() => handleColorClick(color)}
+				style="
+					background:{color};
+					border-top-right-radius: {i == colors.length - 1 ? '5px' : ''};
+    				border-bottom-right-radius: {i == colors.length - 1 ? '5px' : ''};
+					border-top-left-radius: {i == 0 ? '5px' : ''};
+					border-bottom-left-radius: {i == 0 ? '5px' : ''};
+				"
+			>
+			</button>
+		{/each}
+		</div>
+	</div>
 	<!-- <button on:click={() => sortColor(courtData)}>sort</button> -->
 </div>
 
@@ -1141,6 +1199,17 @@
 	.every {
 		font-size: 24px;
 		font-family: var(--sans);
+		margin: 0;
+		margin-bottom: 10px;
+	}
+
+	.every span, .every-small span {
+		background-color: black;
+		padding: 10px 10px;
+	}
+
+	.every-small {
+		font-size: 16px;
 	}
 
 	.loading-text {
@@ -1191,6 +1260,12 @@
 	.start-button {
 		margin: 0 auto;
     	display: block;
+		background:white;
+		font-size: 18px;
+		margin-top: 10px;
+		padding: 10px 30px;
+		border-radius: 50px;
+
 	}
 
 	.favorite-text {
@@ -1306,8 +1381,6 @@
 	}
 
 	.geocoder {
-		margin-top: 20px;
-		margin-left: 20px;
 	}
 
     .el {
@@ -1321,5 +1394,62 @@
 
 	.el.showEl {
 		display: block;
+	}
+
+	.toolbar {
+		position: fixed;
+		display: -webkit-box;
+		display: flex;
+		top: 0rem;
+		z-index: 10000;
+		left: 0;
+		right: 0;
+		margin: 0 auto;
+		justify-content: center;
+		opacity: 0;
+		transform: translate(0,-50px);
+		transition: transform .5s, opacity .5s;
+		padding: 2rem;
+		background: linear-gradient(180deg, black, rgba(0,0,0,0));
+		padding-bottom: 6rem;
+	}
+
+	.toolbar-visible {
+		transform: translate(0,0px);
+		opacity: 1;
+	}
+
+	.color-finder {
+		font-family: var(--sans);
+		background-color: black;
+		color: white;
+		font-size: 14px;
+		display: flex;
+		align-items: center;
+		margin-left: 20px;
+		padding: 8px 20px;
+		border-radius: 5px;
+	}
+
+	.color-swatches {
+		display: flex;
+	}
+
+	.color-swatches button {
+		border-radius: 0px;
+		min-width: 30px;
+		min-height: 20px;
+	}
+
+	.color-finder span {
+		-webkit-font-smoothing: antialiased;
+  		-moz-osx-font-smoothing: grayscale;
+		text-transform: uppercase;
+		letter-spacing: .5px;
+		font-size: 12px;
+		font-weight: 500;
+		margin-right: 10px;
+		pointer-events: none;
+		user-select: none;
 	}
 </style>
