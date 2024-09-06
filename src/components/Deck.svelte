@@ -13,6 +13,7 @@
     import { tweened } from "svelte/motion";
 	import calcSquareSize from "$actions/getMaxSizeSquare.js"
 	import calcSquareSizeFiltered from "$actions/getMaxSizeSquareFiltered.js"
+	import Mark from "$svg/mark.svg";
 
 
 
@@ -46,9 +47,11 @@
 	
 	$: console.log(zoom)
 
-	let skipIntro = true;
-	let showEl = true;
+	let skipIntro = false;
+	let showEl = false;
 	let sizesFiltered;
+
+	let swatchSet = null;
 
 	let colors = [
 		"rgb(45, 181, 77)",
@@ -116,11 +119,10 @@
 		else {
 			spritePositionsMaster = data.map(d => d);
 		}
-		
+
 		sizesFiltered = calcSquareSizeFiltered(viewportWidth,viewportHeight,spritePositionsMaster.length,10);
 
 		let squareSize = sizesFiltered.rowSize;
-		console.log(spritePositionsMaster.length,sizesFiltered,sizes)
 
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 
@@ -130,6 +132,7 @@
 			let supa = supaBaseData.has(+id) ? supaBaseData.get(+id) : null;
 
 			if(supa){
+				console.log(supa)
 				faves = supa.count ? supa.count : 0;
 				comments = supa.comment_count ? supa.comment_count : 0;
 			}
@@ -159,6 +162,28 @@
 				comments:comments
 			};
 		});
+
+		if(sortValue){
+			spritePositionsMaster = spritePositionsMaster.sort((a,b) => {
+				if(sortValue == "heart"){
+					return b.likes - a.likes;
+				}
+				if(sortValue == "comment"){
+					return b.comments - a.comments;
+				}
+				
+			})
+
+			spritePositionsMaster.forEach((d,i) => {
+				let x = (i % squareSize) * sizes.size + (i % squareSize)*.1// + Math.random()*1;
+				let y = Math.floor(i/squareSize) * sizes.size + Math.floor(i/squareSize)*.1// + Math.random() * 1;
+
+				d.coordinates = [x,y];
+			})
+
+			console.log(spritePositionsMaster.slice(0,10))
+		}
+		
 
 		return spritePositionsMaster;
 	}
@@ -303,8 +328,6 @@
 				size:(.066*sizes.size)
 			})
 		}
-
-		console.log(textData)
 
 		return textData;
 	}
@@ -744,6 +767,7 @@
 
 		await new Promise(async(resolve, reject) => {    	
 			supaBaseData = index(await countFaves(), d => d.court_id);
+			console.log(supaBaseData)
 			resolve(supaBaseData);
 		})
 		.then((result) => {						
@@ -841,6 +865,7 @@
 					if(xPercent > .79){
 						// console.log("valid")
 						if(yPercent > .89){
+							console.log("heart clicked")
 							updateFromHeartClick(image.id,image,[x,y]);							
 						}
 						else if(yPercent > .75){
@@ -912,13 +937,14 @@
 
 	async function updateFromHeartClick(id,image,coors){
 		heartCoors = coors;
+		favoritedCourt = `#${formatComma(image.info.court_count)} in ${image.info.location}, ${image.info.state}`
+
 		favoriteActive = true;
 
 		courtsWithFavorites[id] = (courtsWithFavorites[id] || 0) + 1;
 		courtsFaveCount = [courtsFaveCount[0] + 1];
 		courtsFaveCount = [...courtsFaveCount];
 
-		favoritedCourt = `#${formatComma(image.info.court_count)} in ${image.info.location}, ${image.info.state}`
 
 		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
 
@@ -992,8 +1018,6 @@
 				filteredIds = []
 			}
 
-			console.log(filteredIds);
-
 			spritePositionsMaster = makeMasterData(filteredIds,courtData);
 			resolve();
 		})
@@ -1023,9 +1047,25 @@
 		duration: 10000,
 	});
 
-	async function handleColorClick(colorSet){
-		await sortImages(false,colorSet);
+	let sortValue = null;
+
+	async function handleSort(sortvalue){
+		await sortImages(false,false);
 		rebuildGrid();
+	}
+
+
+	async function handleColorClick(colorSet){
+		if(swatchSet !== colorSet){
+			swatchSet = colorSet;
+			await sortImages(false,colorSet);
+			rebuildGrid();
+		}
+		else {
+			swatchSet = null;
+			await sortImages(false,false);
+			rebuildGrid();
+		}
 	}
 
 	function handleStartButtonClick() {
@@ -1077,6 +1117,11 @@
 
 	{#if countTweenFinished}
 		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
+			<div class="logo">
+				<a href="https://pudding.cool" target="_blank">
+					{@html Mark}
+				</a>
+			</div>
 			<p class="every">
 				<span>Every Outdoor Basketball Court in the U.S.A.</span>
 			</p>	
@@ -1132,24 +1177,42 @@
 </div>
 
 <div class="toolbar {skipIntro ? 'toolbar-visible' : ''}">
-	<div bind:this={inputBox} id="geocoder" class="geocoder">
+	<div class="toolbar-logo">
+		<a href="https://pudding.cool" target="_blank">
+			{@html Mark}
+		</a>
 	</div>
-	<div class="color-finder">
-		<span>Filter Court Colors</span>
-		<div class="color-swatches">
-		{#each colors as color, i}
-			<button
-				on:click={() => handleColorClick(color)}
-				style="
-					background:{color};
-					border-top-right-radius: {i == colors.length - 1 ? '5px' : ''};
-    				border-bottom-right-radius: {i == colors.length - 1 ? '5px' : ''};
-					border-top-left-radius: {i == 0 ? '5px' : ''};
-					border-bottom-left-radius: {i == 0 ? '5px' : ''};
-				"
-			>
-			</button>
-		{/each}
+
+	<div class="settings">
+		<div bind:this={inputBox} id="geocoder" class="geocoder">
+		</div>
+		<div class="color-finder">
+			<span>Court Color</span>
+			<div class="color-swatches">
+			{#each colors as color, i}
+				<button
+					on:click={() => handleColorClick(color)}
+					class="{color == swatchSet ? 'swatch-selected' : ''}"
+					style="
+						background:{color};
+						border-top-right-radius: {i == colors.length - 1 ? '5px' : ''};
+						border-bottom-right-radius: {i == colors.length - 1 ? '5px' : ''};
+						border-top-left-radius: {i == 0 ? '5px' : ''};
+						border-bottom-left-radius: {i == 0 ? '5px' : ''};
+					"
+				>
+				</button>
+			{/each}
+			</div>
+			<span class="sorted-by">Sort By</span>
+			<div class=sort-buttons>
+				<button
+					on:click={() => handleSort("heart")}
+				>♡</button>
+				<button
+					on:click={() => handleSort("comment")}
+				>💬</button>
+			</div>
 		</div>
 	</div>
 	<!-- <button on:click={() => sortColor(courtData)}>sort</button> -->
@@ -1167,9 +1230,7 @@
 		</div>
 	{/key}
 
-	{#key favoritedCourt}
-		<p in:fly={{duration:500,y:20,delay:300}}>Like Added to Court {favoritedCourt}</p>
-	{/key}
+	<p>Like Added to Court {favoritedCourt}</p>
 </div>
 
 {#if spritePositionsMaster}
@@ -1390,6 +1451,7 @@
 	}
 
 	.geocoder {
+		pointer-events: all;
 	}
 
     .el {
@@ -1405,16 +1467,28 @@
 		display: block;
 	}
 
+	.settings {
+		display: flex;
+	}
+
+	.toolbar-logo {
+		width: 140px;
+		transform:translate(0,5px) rotate(-4deg);
+		pointer-events: all;
+	}
+
+
 	.toolbar {
 		position: fixed;
 		display: -webkit-box;
 		display: flex;
 		top: 0rem;
+		pointer-events: none;
 		z-index: 10000;
 		left: 0;
 		right: 0;
 		margin: 0 auto;
-		justify-content: center;
+		justify-content: space-between;
 		opacity: 0;
 		transform: translate(0,-50px);
 		transition: transform .5s, opacity .5s;
@@ -1432,11 +1506,12 @@
 		font-family: var(--sans);
 		background-color: black;
 		color: white;
+		pointer-events: all;
 		font-size: 14px;
 		display: flex;
 		align-items: center;
 		margin-left: 20px;
-		padding: 8px 20px;
+		padding: 2px 10px;
 		border-radius: 5px;
 	}
 
@@ -1450,15 +1525,61 @@
 		min-height: 20px;
 	}
 
+	.swatch-selected {
+		position: relative;
+	}
+
+	.swatch-selected:after {
+		content: '';
+		background-color: rgba(0,0,0,.2);
+		position: absolute;
+		outline: 1.5px solid white;
+		border-radius: 1px;
+		top: 0;
+		left: 0;
+		height: 100%;
+		width: 100%;
+	}
+
 	.color-finder span {
 		-webkit-font-smoothing: antialiased;
   		-moz-osx-font-smoothing: grayscale;
 		text-transform: uppercase;
 		letter-spacing: .5px;
-		font-size: 12px;
+		font-size: 11px;
 		font-weight: 500;
 		margin-right: 10px;
 		pointer-events: none;
 		user-select: none;
+		width: 65px;
+		line-height: 1.2;
+		text-align: right;
+	}
+	.color-finder span.sorted-by {
+		margin-left: 20px;
+		width: 40px;
+	}
+
+	.sort-buttons {
+		display: flex;
+	}
+
+	.sort-buttons button {
+		background-color: #333;
+		margin-right: 10px;
+		padding: 5px 10px;
+		color: white;
+	}
+
+	.logo {
+		width: 200px;
+		transform: rotate(-4deg);
+		margin: 0 auto;
+		margin-bottom: 30px;
+	}
+
+	.logo a, .toolbar-logo a {
+		border: none;
+		text-decoration: none;
 	}
 </style>

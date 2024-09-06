@@ -82,6 +82,10 @@
 	width: 100%;
 }
 
+.logo svg #color-stroke {
+	fill: white;
+}
+
 h1 {
 	font-size: var(--48px, 48px);
 }
