@@ -1,10 +1,9 @@
 <script>
 	import { onMount } from "svelte";
-	import { easeCubic, index, format } from "d3";
+	import { easeCubic, index, format, csv } from "d3";
 	import filterLocation from '$actions/filterAddresses.js'
 	import filterColor from '$actions/filterColors.js';
 	import colorSort from "$actions/colorSort.js";
-	import courtData from "$data/data.csv";
 	import {Deck, OrthographicView, OrthographicViewport, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer, TextLayer} from '@deck.gl/layers';
 	import {TileLayer} from '@deck.gl/geo-layers';
@@ -50,6 +49,7 @@
 	let skipIntro = false;
 	let showEl = false;
 	let sizesFiltered;
+	let courtData;
 
 	let swatchSet = null;
 
@@ -376,17 +376,13 @@
       }
 	  console.log("loading done")
 	  
-	  await makeTileLayer();
-	  await loadTestIconAtlas();
-	  await loadText();
+	//   await makeTileLayer();
+	//   await loadTestIconAtlas();
+	//   await loadText();
 
-	  deckgl.setProps({
-	  	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-	  });
-
-	//   setTimeout(() => {
-	// 	zoomTo(0);
-	//   },1000)
+	//   deckgl.setProps({
+	//   	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+	//   });
 
     }
 
@@ -753,6 +749,13 @@
 	onMount(async () => {
 		mounted = true;
 
+
+		courtData = await new Promise(async(resolve, reject) => { 
+			const data = await csv('assets/data.csv');
+			// const data = await csv(response);
+			resolve(data);
+		});
+
 		sizes = calcSquareSize(viewportWidth,viewportHeight,courtData.length,10);
 		
 
@@ -765,9 +768,9 @@
         	geoJSON = result;
     	})
 
+
 		await new Promise(async(resolve, reject) => {    	
 			supaBaseData = index(await countFaves(), d => d.court_id);
-			console.log(supaBaseData)
 			resolve(supaBaseData);
 		})
 		.then((result) => {						
@@ -1070,7 +1073,7 @@
 
 	function handleStartButtonClick() {
 		skipIntro = true;
-		zoomTo(3)
+		rebuildGrid();
 	}
 
 	function handleWorldFinished() {
