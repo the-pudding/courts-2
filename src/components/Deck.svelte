@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
 	import { easeCubic, index, format } from "d3";
 	import filterLocation from '$actions/filterAddresses.js'
+	import filterColor from '$actions/filterColors.js';
 	import colorSort from "$actions/colorSort.js";
 	import courtData from "$data/data.csv";
 	import {Deck, OrthographicView, OrthographicViewport, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
@@ -24,7 +25,9 @@
 	} from "$stores/misc.js";
 
 	import {
-		countFaves
+		countFaves,
+		addRow,
+		addComment
 	} from "$utils/supabase.js";
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
@@ -43,8 +46,8 @@
 	
 	$: console.log(zoom)
 
-	let skipIntro = false;
-	let showEl = false;
+	let skipIntro = true;
+	let showEl = true;
 	let sizesFiltered;
 
 	let colors = [
@@ -117,7 +120,7 @@
 		sizesFiltered = calcSquareSizeFiltered(viewportWidth,viewportHeight,spritePositionsMaster.length,10);
 
 		let squareSize = sizesFiltered.rowSize;
-		console.log(sizesFiltered,sizes)
+		console.log(spritePositionsMaster.length,sizesFiltered,sizes)
 
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 
@@ -799,12 +802,12 @@
 		geocoder.setPlaceholder("Search for a location...")
 
 		geocoder.on('result', async(e) => {
-    		await sortImages(e);
+    		await sortImages(e,false);
 			rebuildGrid();
 		});
 
 		geocoder.on('clear', async(e) => {
-    		await sortImages(false);
+    		await sortImages(false,false);
 			rebuildGrid();
 		});
 
@@ -918,17 +921,15 @@
 		favoritedCourt = `#${formatComma(image.info.court_count)} in ${image.info.location}, ${image.info.state}`
 
 		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
-		// console.log(courtsWithFavorites)
 
-		// let textData = await makeTextData();
-		// textLayer.data = [...textData];
 		await loadText();
 		
 		deckgl.setProps({
 			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 		});
 
-
+		addRow(id);
+		
 		setTimeout(() => {
 			favoriteActive = false;
 		},5000)
@@ -973,10 +974,16 @@
 	}
 
 
-	function sortImages(locationData){
+	function sortImages(locationData,colorData){
 		return new Promise((resolve, reject) => {
 			if(locationData){
 				filteredIds = filterLocation(courtData,locationData,"bbox");
+				if(filteredIds.length == 0){
+					filteredIds = ["none"]
+				}
+			}
+			else if (colorData) {
+				filteredIds = filterColor(courtData,colorData)//filterLocation(courtData,locationData,"bbox");
 				if(filteredIds.length == 0){
 					filteredIds = ["none"]
 				}
@@ -1006,6 +1013,7 @@
 		});
 	}
 
+
 	function handleDragStart(event) {
     	event.stopPropagation();
 		event.preventDefault();
@@ -1015,8 +1023,9 @@
 		duration: 10000,
 	});
 
-	function handleColorClick(color){
-		console.log("handle color", color)
+	async function handleColorClick(colorSet){
+		await sortImages(false,colorSet);
+		rebuildGrid();
 	}
 
 	function handleStartButtonClick() {

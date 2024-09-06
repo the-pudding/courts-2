@@ -21,8 +21,8 @@ export default function filterLocation(courts,location,filterType) {
 
         let ptsWithin = pointsWithinPolygon(pointArray, polygonToSearch).features.map(d => {
             return d.properties.id;
-        });    
-        
+        });
+                
         return ptsWithin;
     }
 }
