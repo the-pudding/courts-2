@@ -31,9 +31,6 @@
             navigationInstructionsInitiallyVisible: false
         });
 
-        console.log(viewer)
-
-
         const tileset = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
             url: `https://tile.googleapis.com/v1/3dtiles/root.json?key=${GoogleKey}`,
         }));
