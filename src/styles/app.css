@@ -109,3 +109,15 @@ h5 {
 h6 {
 	font-size: var(--20px, 20px);
 }
+
+@media only screen and (max-width: 500px) {
+	#content .mapboxgl-ctrl-geocoder--icon-close {
+		margin-top: 4px;
+	}
+	#content .mapboxgl-ctrl-geocoder--icon-search{
+		top: 8px;
+	}
+	#content .mapboxgl-ctrl-geocoder--input {
+		height: 40px;
+	}
+}

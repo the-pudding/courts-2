@@ -45,13 +45,13 @@
 	$: console.log(zoom)
 
 	// $: zoom, showHelp = false;
-
+	let geocoder;
 	let showHelp = false;
-	let skipIntro = false;
-	let showEl = false;
+	let skipIntro = true;
+	let showEl = true;
 	let sizesFiltered;
 	let courtData;
-
+	let loadingDone = false;
 	let swatchSet = null;
 
 	let colors = [
@@ -70,6 +70,10 @@
 	let el;
 	let zoom = 0;
 	let tileLayerZoom = 4.99;
+	if(viewportWidth < 500){
+		tileLayerZoom = 5.99
+	}
+	
 	let targetDeck;
 	let deckgl;
 	let dummy;
@@ -374,15 +378,18 @@
 			layers: layers
 		});
       }
+
+
+	  loadingDone = true;
 	  console.log("loading done")
 	  
-	//   await makeTileLayer();
-	//   await loadTestIconAtlas();
-	//   await loadText();
+	  await makeTileLayer();
+	  await loadTestIconAtlas();
+	  await loadText();
 
-	//   deckgl.setProps({
-	//   	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-	//   });
+	  deckgl.setProps({
+	  	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+	  });
 
     }
 
@@ -457,6 +464,9 @@
 		if(!skipIntro){
 			countTween.set(1).then(() => {
 				countTweenFinished = true;
+				// swatchSet = colors[1];
+				// sortImages(false,swatchSet);
+				// rebuildGrid();
 			})
 		}
 		
@@ -485,6 +495,9 @@
 
 		let tileLayer = new TileLayer({
 			tileSize: 256,
+			// zoomOffset: 5,
+			minZoom: 5,
+			debounceTime: 100,
 			id:`tileLayer_`,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
 			// visible: zoom > 4.5,
@@ -537,7 +550,7 @@
 				if (signal.aborted) {
     				return null;
   				}
-				return getData(bbox, id);
+				return getData(bbox, id, signal);
 			},
 			updateTriggers: {
 				// renderSubLayers: courtsFaveCount,
@@ -668,24 +681,30 @@
 		});
   	}
 
-	async function getData(bbox, id) {
-  	// Stall for 20ms - simulate an async request
-  		// await new Promise(resolve => setTimeout(resolve, 100));
+	async function getData(bbox, id, signal) {
+  		// Stall for 20ms - simulate an async request
+  		await new Promise(resolve => setTimeout(resolve, 100));
+
 		if(!courtData){
 			return [];
 		}
 
-		// console.log(bbox)
+		if(signal.aborted){
+			return null;
+		}
+
 		const { left, right, top, bottom } = bbox;
 
 		let highResData = [];
 		for (let i = 0; i < spritePositionsMaster.length; i++) {
 			const d = spritePositionsMaster[i];
 			const [x, y] = d.coordinates;
-			if (x >= left && x <= right && y >= top && y <= bottom) {
+			if ((x + sizes.size/2) >= left && (x + sizes.size/2) <= right && (y + sizes.size/2) >= top && (y + sizes.size/2) <= bottom) {
 				highResData.push(d);
 			}
 		}
+
+		console.log(highResData)
 
 		return highResData
 	}
@@ -762,9 +781,10 @@
 		await assignDataToIconLayers()
 		await makeIconLayers();
 
-		const geocoder = new MapboxGeocoder({
+		geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2x5YzVlcXZ4MW1qajJsb3RoeWI0bzhmZyJ9.DY653tAkLZCDMMEPuFvoGA',
 			types: 'region,postcode,district,place,neighborhood',
+			countries: "us",
 			options: {
 				marker: false,
 				countries: "us"
@@ -772,6 +792,7 @@
 		});
 		geocoder.addTo(inputBox)
 		geocoder.setPlaceholder("Search for a location...")
+		geocoder.setCountries("us")
 
 		geocoder.on('result', async(e) => {
 			sortValue = null;
@@ -932,7 +953,7 @@
 		
 		setTimeout(() => {
 			favoriteActive = false;
-		},5000)
+		},3000)
 	}
 
 	async function updateFromCommentClick(id){
@@ -957,9 +978,15 @@
 	}
 
 	async function rebuildGrid(){
-		let zoom = Math.log2(sizesFiltered.size / sizes.size);
-
-		zoomTo(zoom-.2);
+		let zooming;
+		
+		if(sizesFiltered.rowSize == 0){
+			// zooming = 0;
+		} else {
+			zooming = Math.log2(sizesFiltered.size / sizes.size);
+			zoomTo(zooming-.2);
+		} 
+		
 
 		await assignDataToIconLayers()
 		await makeIconLayers();
@@ -1016,6 +1043,7 @@
 	}
 	async function handleColorClick(colorSet){
 		sortValue = null;
+		geocoder.clear();
 
 		if(swatchSet !== colorSet){
 			swatchSet = colorSet;
@@ -1081,7 +1109,7 @@
 		</div>
 	{/if}
 
-	{#if countTweenFinished}
+	{#if countTweenFinished && loadingDone}
 		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
 			<div class="logo">
 				<a href="https://pudding.cool" target="_blank">
@@ -1092,7 +1120,7 @@
 				<span>Every Outdoor Basketball Court in the U.S.A.</span>
 			</p>	
 			<p class="every every-small">
-				<span>Explore by Panning and Zooming on 59,507 Courts</span>
+				<span>Help us by documenting important outdoor courts.</span>
 			</p>
 			<div class="start-button-container">
 				<button class="start-button" on:click={() => handleStartButtonClick()}>Begin Exploring</button>
@@ -1250,6 +1278,10 @@
 		z-index: 100000;
 		display: flex;
 		width: 100%;
+		max-width: calc(100% - 20px);
+		left: 0;
+		right: 0;
+		margin: 0 auto;
 		flex-direction: column;
 		justify-content: center;
 		height: 100%;
@@ -1554,7 +1586,7 @@
 	}
 
 	.instructions {
-		background: white;
+		background: #fefca8;
 		color: black;
 		width: 100px;
 		font-family: var(--sans);
@@ -1562,8 +1594,8 @@
 		padding: 5px;
 		font-size: 11px;
 		position: absolute;
-		top: 10px;
-		right: 10px;
+		top: 0px;
+		right: 0px;
 		margin: 0;
 		z-index: 100;
 		font-weight: 600;
@@ -1632,5 +1664,97 @@
 		}
 	}
 
+	@media only screen and (max-width:1000px) {
+		.toolbar {
+			width: 100%;
+			flex-wrap: wrap;
+			height: calc(100% - 20px);
+			background: none;
+			padding: 0;
+			justify-content: flex-start;
+			flex-direction: column;
+			align-items: center;
+
+		}
+		.settings {
+			pointer-events: none;
+			width: calc(100% - 50px);
+			flex-direction: column;
+			flex-grow: 1;
+			justify-content: space-between;
+		}
+		
+		.toolbar:before {
+			content: '';
+			height: 50px;
+			position: absolute;
+			width: 100%;
+			background: linear-gradient(180deg, black, rgba(0,0,0,0));
+		}
+		.about {
+			z-index: 1000000;
+			right: 30px;
+			bottom: 25px;
+		}
+		.toolbar-logo {
+			height: 50px;
+			margin-top: 5px;
+		}
+		.every span, .every-small span {
+			background: none;
+			padding: 0;
+		}
+
+		.color-finder {
+			width: 100%;
+			flex-wrap: wrap;
+			margin: 0;
+			padding: 10px;
+		}
+		.color-finder span.sorted-by {
+			margin: 0;
+			margin-top: 10px;
+			margin-right: 10px;
+			width: 60px;
+		}
+		.sort-buttons {
+			margin-top: 10px;
+		}
+		.color-finder span {
+			width: 60px;
+		}
+		.color-swatches {
+		}
+
+		.every, .every-small {
+			background-color: black;
+			padding: 10px;
+		}
+	}
+
+	@media only screen and (min-width:550px) and (max-width: 1000px) {
+		.geocoder {
+			display: flex;
+			margin-top: 1rem;
+			margin-right: 1rem;
+			justify-content: flex-end;
+		}
+		.toolbar-logo {
+			margin: 0;
+			top: 1rem;
+			left: 1rem;
+			right: auto;
+			position: absolute;
+		}
+		.color-finder {
+			width: fit-content;
+		}
+		.color-finder span.sorted-by {
+			margin-top: 0px;
+		}
+		.sort-buttons {
+			margin-top: 0px;
+		}
+	}
 
 </style>
