@@ -15,7 +15,6 @@
 	import About from "$components/About.svelte"
 
 	import ThreeD from "$components/ThreeD.svelte"
-	
 	import Comment from "$components/Comment.svelte"
 
 	import {
@@ -24,8 +23,7 @@
 
 	import {
 		countFaves,
-		addRow,
-		addComment
+		addRow		
 	} from "$utils/supabase.js";
 
 	import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
@@ -44,11 +42,12 @@
 	
 	$: console.log(zoom)
 
-	// $: zoom, showHelp = false;
+	let skipIntro = false;
+	let showEl = false;
+	
 	let geocoder;
 	let showHelp = false;
-	let skipIntro = true;
-	let showEl = true;
+	
 	let sizesFiltered;
 	let courtData;
 	let loadingDone = false;
@@ -70,9 +69,6 @@
 	let el;
 	let zoom = 0;
 	let tileLayerZoom = 4.99;
-	if(viewportWidth < 500){
-		tileLayerZoom = 5.99
-	}
 	
 	let targetDeck;
 	let deckgl;
@@ -383,13 +379,13 @@
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	  await makeTileLayer();
-	  await loadTestIconAtlas();
-	  await loadText();
+	//   await makeTileLayer();
+	//   await loadTestIconAtlas();
+	//   await loadText();
 
-	  deckgl.setProps({
-	  	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-	  });
+	//   deckgl.setProps({
+	//   	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+	//   });
 
     }
 
@@ -554,7 +550,7 @@
 			},
 			updateTriggers: {
 				// renderSubLayers: courtsFaveCount,
-				getTileData:[courtsFaveCount,sortValue],
+				getTileData:[courtsFaveCount,sortValue,swatchSet],
 				// all:courtsFaveCount,
 			},
 			renderSubLayers: props => {
@@ -1043,7 +1039,7 @@
 	}
 	async function handleColorClick(colorSet){
 		sortValue = null;
-		geocoder.clear();
+		geocoder.setInput('');
 
 		if(swatchSet !== colorSet){
 			swatchSet = colorSet;
