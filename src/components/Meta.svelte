@@ -1,9 +1,9 @@
 <script>
-	export let title = "Every Outdoor Basketball Court in the U.S.A.";
-	export let description = "Explore Satellite Imagery of 59,507 Basketball Courts";
-	export let url = "https://pudding.cool/2024/09/courts";
-	export let keywords = "basketball,courts,satellite,images";
-	export let preloadFont = [];
+	let title = "Every Outdoor Basketball Court in the U.S.A.";
+	let description = "Explore Satellite Imagery of 59,507 Basketball Courts";
+	let url = "https://pudding.cool/2024/09/courts";
+	let keywords = "basketball,courts,satellite,images";
+	let preloadFont = [];
 </script>
 
 <svelte:head>

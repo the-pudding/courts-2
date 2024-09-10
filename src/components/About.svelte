@@ -13,10 +13,8 @@
 
 <div class="about">
     <button class="close" on:click={modalClose}>Close</button>
-
     <p>By <a target="_blank" href="https://pudding.cool/author/matt-daniels/">Matthew Daniels</a>. Reach out at matt@pudding.cool</p>
     <p>Court Locations are retrieved from <a href="https://www.openstreetmap.org/#map=4/38.01/-95.84">Open Street Map</a>.</p>
-
 </div>
 
 <style>
@@ -33,6 +31,7 @@
         max-width: 400px;
         padding: 1rem;
         transform: translate(0,-50%);
+        padding: 0.35em 0.75em 0.625em;
     }
 
     .about p {

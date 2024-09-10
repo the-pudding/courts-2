@@ -44,7 +44,9 @@
 
 	let skipIntro = false;
 	let showEl = false;
+	let locationQueried = false;
 	
+	let keyboardControls = false;
 	let geocoder;
 	let showHelp = false;
 	
@@ -67,7 +69,8 @@
 	let formatComma = format(",");
 	let screenCoordinates = [];
 	let el;
-	let zoom = 0;
+	let zoom = 1;
+	let tileMinZoom = 3.99;
 	let tileLayerZoom = 4.99;
 	
 	let targetDeck;
@@ -379,13 +382,13 @@
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	//   await makeTileLayer();
-	//   await loadTestIconAtlas();
-	//   await loadText();
+	  await makeTileLayer();
+	  await loadTestIconAtlas();
+	  await loadText();
 
-	//   deckgl.setProps({
-	//   	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-	//   });
+	  deckgl.setProps({
+	  	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+	  });
 
     }
 
@@ -492,15 +495,16 @@
 		let tileLayer = new TileLayer({
 			tileSize: 256,
 			// zoomOffset: 5,
-			minZoom: 5,
+			//minZoom: tileMinZoom,
 			debounceTime: 100,
 			id:`tileLayer_`,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-			// visible: zoom > 4.5,
+			//visible: zoom > tileMinZoom,
 			onViewportLoad: layers => {
 				// console.log(layers,"hi")
 				let oldLength = renderedSublayers.length;
-				renderedSublayers= Array.from(layers
+
+				renderedSublayers = Array.from(layers
 					.flatMap(obj => obj.content ? obj.content : [])
 					.reduce((map, item) => {
 						if (!map.has(+item.id)) {
@@ -511,6 +515,8 @@
 					.values())
 					;
 				if(oldLength == 0 && renderedSublayers.length > 0){
+
+					console.log(renderedSublayers);
 
 					// deckgl.redraw();
 		
@@ -540,7 +546,7 @@
 				}
     		},
 			getTileData: async ({id, bbox,signal}) => {
-				if(zoom < tileLayerZoom){
+				if(zoom < tileMinZoom){
 					return null;
 				}
 				if (signal.aborted) {
@@ -550,7 +556,7 @@
 			},
 			updateTriggers: {
 				// renderSubLayers: courtsFaveCount,
-				getTileData:[courtsFaveCount,sortValue,swatchSet],
+				getTileData:courtsFaveCount//[courtsFaveCount,sortValue,swatchSet,locationQueried],
 				// all:courtsFaveCount,
 			},
 			renderSubLayers: props => {
@@ -592,10 +598,10 @@
 						let imgType = "webp"
 						let imgSize = 150;
 						let imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imgSize}/${imageId}.${imgType}`
-						if(zoom > tileLayerZoom){
+						// if(zoom > 6){
 							imgType = "jpg";
 							imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`
-						}
+						// }
 
 						
 						const item = new BitmapLayer(props,{
@@ -610,13 +616,7 @@
 						})
 
 						
-						console.log("pushing")
-						// if(zoom > 4.5){
-							layers.push(item);
-							// layers.push(itemTwo);
-						// }
-
-						// layers.push(textLayer);
+						layers.push(item);
 
 
 					}
@@ -675,6 +675,8 @@
 				info: d
 			}
 		});
+
+		// console.log(screenCoordinates)
   	}
 
 	async function getData(bbox, id, signal) {
@@ -699,8 +701,6 @@
 				highResData.push(d);
 			}
 		}
-
-		console.log(highResData)
 
 		return highResData
 	}
@@ -793,14 +793,15 @@
 		geocoder.on('result', async(e) => {
 			sortValue = null;
 			swatchSet = null;
-
     		await sortImages(e,false);
 			rebuildGrid();
+			// locationQueried = e.result.text;
 		});
 
 		geocoder.on('clear', async(e) => {
 			sortValue = null;
 			swatchSet = null;
+			// locationQueried = null;
 
     		await sortImages(false,false);
 			rebuildGrid();
@@ -813,7 +814,7 @@
 			views: new OrthographicView(),
 		    initialViewState: { 
 				target: [viewportWidth/2, viewportHeight/2, 0],
-				zoom: 1,
+				zoom: zoom,
 				transitionInterpolator: new LinearInterpolator(['zoom','target']),
 			    transitionDuration: 1000
 			},
@@ -832,7 +833,10 @@
 					let xPercent = (x-image.screenPosition[0])/image.screenWidth;
 					let yPercent = (y-image.screenPosition[1])/image.screenWidth;
 
-					// console.log(xPercent,yPercent)
+					// console.log(image,[x,y])
+
+
+
 					if(xPercent > .79){
 						// console.log("valid")
 						if(yPercent > .89){
@@ -986,7 +990,7 @@
 
 		await assignDataToIconLayers()
 		await makeIconLayers();
-		await makeTileLayer();
+		// await makeTileLayer();
 		await loadTestIconAtlas();
 	  	await loadText();
 
@@ -994,10 +998,15 @@
 			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 		});
 
+		courtsFaveCount = [courtsFaveCount[0] + 1];
+		courtsFaveCount = [...courtsFaveCount];
+
+
 	}
 
 
 	function sortImages(locationData,colorData){
+
 		return new Promise((resolve, reject) => {
 			if(locationData){
 				filteredIds = filterLocation(courtData,locationData,"bbox");
@@ -1029,17 +1038,47 @@
 	async function handleSort(selected){
 		sortValue = selected;
 		swatchSet = null;
+		geocoder.setInput('');
+		locationQueried = null;
 
 		await sortImages(false,false);
 		rebuildGrid();
 	}
 
+	async function handleKeyboardButtonPress(button,box,event){
+		// console.log(button,box,event)
+		if(button == "like"){
+			updateFromHeartClick(box.id,box,[event.x,event.y]);
+		}
+		else if (button == "comment"){
+			updateFromCommentClick(box.id);
+		}
+		else if (button == "mag") {
+			threeDId = box.info.id;
+			threeDNode = box.info.latLong;
+			$isThreeD = true;
+		}
+
+	}
+
 	async function handleAbout(){
 		$aboutVisible = true;
+	}
+
+	async function handleZoomClick(dir){
+		console.log(zoom)
+		if(dir == "out"){
+			zoomTo(zoom - 1);
+		}
+		else {
+			zoomTo(zoom + 1);
+		}
 	}
 	async function handleColorClick(colorSet){
 		sortValue = null;
 		geocoder.setInput('');
+		locationQueried = null;
+
 
 		if(swatchSet !== colorSet){
 			swatchSet = colorSet;
@@ -1116,7 +1155,7 @@
 				<span>Every Outdoor Basketball Court in the U.S.A.</span>
 			</p>	
 			<p class="every every-small">
-				<span>Help us by documenting important outdoor courts.</span>
+				<span>Help us document the stories behind every outdoor court in America.</span>
 			</p>
 			<div class="start-button-container">
 				<button class="start-button" on:click={() => handleStartButtonClick()}>Begin Exploring</button>
@@ -1135,7 +1174,7 @@
 	{#if $isCommenting == true}
 		<Comment {commentId} on:formSubmit={handleCommentSubmit} />
 	{/if}
-
+			
 	{#if $aboutVisible}
 		<About />
 	{/if}
@@ -1153,15 +1192,7 @@
 	</div>
 {/if}
 
-{#if skipIntro}
-	<div class="about">
-		<button
-			on:click={() => handleAbout()}
-		>About
 
-		</button>
-	</div>
-{/if}
 
 <div class="toolbar {skipIntro ? 'toolbar-visible' : ''}">
 	<div class="toolbar-logo">
@@ -1169,40 +1200,78 @@
 			{@html Mark}
 		</a>
 	</div>
-
+	
 	<div class="settings">
 		<div bind:this={inputBox} id="geocoder" class="geocoder">
 		</div>
-		<div class="color-finder">
-			<span>Court Color</span>
-			<div class="color-swatches">
-			{#each colors as color, i}
-				<button
-					on:click={() => handleColorClick(color)}
-					class="{color == swatchSet ? 'swatch-selected' : ''}"
-					style="
-						background:{color};
-						border-top-right-radius: {i == colors.length - 1 ? '5px' : ''};
-						border-bottom-right-radius: {i == colors.length - 1 ? '5px' : ''};
-						border-top-left-radius: {i == 0 ? '5px' : ''};
-						border-bottom-left-radius: {i == 0 ? '5px' : ''};
-					"
-				>
-				</button>
-			{/each}
+
+
+		<div class="bottom">
+			{#if keyboardControls}
+				<div class="zoom">
+					<button
+						on:click={() => handleZoomClick("in")}
+					>zoom in
+					</button>
+					<button
+						on:click={() => handleZoomClick("out")}
+					>
+						zoom out
+					</button>
+				</div>
+			{/if}
+	
+			<div class="color-finder">
+				<span>Court Color</span>
+				<div class="color-swatches">
+				{#each colors as color, i}
+					<button
+						on:click={() => handleColorClick(color)}
+						class="{color == swatchSet ? 'swatch-selected' : ''}"
+						style="
+							background:{color};
+							border-top-right-radius: {i == colors.length - 1 ? '5px' : ''};
+							border-bottom-right-radius: {i == colors.length - 1 ? '5px' : ''};
+							border-top-left-radius: {i == 0 ? '5px' : ''};
+							border-bottom-left-radius: {i == 0 ? '5px' : ''};
+						"
+					>
+					</button>
+				{/each}
+				</div>
+				<span class="sorted-by">Sort By</span>
+				<div class=sort-buttons>
+					<button
+						on:click={() => handleSort("heart")}
+					>♡</button>
+					<button
+						on:click={() => handleSort("comment")}
+					>💬</button>
+				</div>
 			</div>
-			<span class="sorted-by">Sort By</span>
-			<div class=sort-buttons>
-				<button
-					on:click={() => handleSort("heart")}
-				>♡</button>
-				<button
-					on:click={() => handleSort("comment")}
-				>💬</button>
+		
+			<div class="about-keyboard">
+				<div class="keyboard-controls">
+					<label for="checkbox1"
+						><input
+							id="checkbox1"
+							name="checkbox"
+							type="checkbox"
+							bind:checked={keyboardControls}
+						/> Keyboard Navigation</label
+					>
+				</div>
+				<div class="about">
+					<button
+						on:click={() => handleAbout()}
+					>About
+			
+					</button>
+				</div>
 			</div>
 		</div>
+
 	</div>
-	<!-- <button on:click={() => sortColor(courtData)}>sort</button> -->
 </div>
 
 <div style="" class="el" class:showEl bind:this={el}>
@@ -1226,9 +1295,31 @@
 	</div>
 {/if}
 
+{#if screenCoordinates.length > 0 && keyboardControls}
+	<div class="screen-coords">
+
+	{#each screenCoordinates as box}
+		<div class="screen-coord" style="left:{box.screenPosition[0]}px; top:{box.screenPosition[1]}px; width:{box.screenWidth}px; height:{box.screenWidth}px;">
+			<button class="like"
+				on:click={(e) => handleKeyboardButtonPress("like",box,e)}
+			>
+			</button>
+			<button class="comment"
+				on:click={(e) => handleKeyboardButtonPress("comment",box,e)}
+			>
+			</button>
+			<button class="mag"
+				on:click={(e) => handleKeyboardButtonPress("mag",box,e)}
+			>
+			</button>
+		</div>
+	{/each}
+	</div>
+{/if}
+
 
 {#if mounted}
-	<div class="noise-overlay mounted" style="background: url(assets/noise-light.png);">
+	<div class="noise-overlay mounted {skipIntro ? "hide-overlay" : ''}" style="background: url(assets/noise-light.png);">
 	</div>
 {/if}
 
@@ -1238,8 +1329,50 @@
 
 
 <style>
+	.screen-coord {
+		position: absolute;
+	}
+	.screen-coords {
+		width: 100%;
+		height: 100%;
+		position: absolute;
+		top: 0;
+		left: 0;
+		pointer-events: none;
+		overflow: hidden;
+	}
+	.screen-coord button {
+		pointer-events: all;
+		position: absolute;
+		border: 1px solid white;
+		background: none;
+		padding: 0;
+		height: 14%;
+	}
+	.screen-coord .like {
+		bottom: 0;
+		right: 2%;
+		width: 23%;
+	}
+
+	.screen-coord .mag {
+		top: 0%;
+		left: 0%;
+		width: 23%;
+	}
+
+	.screen-coord .comment {
+		bottom: 13%;
+		right: 2%;
+		width: 23%;
+	}
+
 	.noise-overlay.mounted {
 		opacity: .3;
+	}
+
+	.noise-overlay.hide-overlay {
+		display: none;
 	}
 
 	.heart-popup {
@@ -1262,11 +1395,20 @@
 
 	.every span, .every-small span {
 		background-color: black;
-		padding: 10px 10px;
+		background: none;
+		padding: 0;
 	}
+
+
+
 
 	.every-small {
 		font-size: 16px;
+	}
+
+	.every, .every-small {
+		background-color: black;
+		padding: 10px;
 	}
 
 	.loading-text {
@@ -1281,6 +1423,7 @@
 		flex-direction: column;
 		justify-content: center;
 		height: 100%;
+		top: 0;
 	}
 
 	.loading-overlay p {
@@ -1422,6 +1565,7 @@
 		position: fixed;
 		top: 0;
 		left: 0;
+		width: 100vw;
         z-index: 1000;
 	}
 
@@ -1443,6 +1587,15 @@
 
 	.geocoder {
 		pointer-events: all;
+		margin-inline-start: auto;
+		margin-top: 1rem;
+		margin-right: 1rem;
+	}
+	
+
+	.about-keyboard {
+		display: flex;
+		margin-left: 1rem;
 	}
 
     .el {
@@ -1460,14 +1613,24 @@
 
 	.settings {
 		display: flex;
+		pointer-events: none;
+		width: calc(100% - 20px);
+		flex-direction: column;
+		flex-grow: 1;
+		justify-content: space-between;
 	}
 
 	.toolbar-logo {
 		width: 140px;
 		transform:translate(0,5px) rotate(-4deg);
 		pointer-events: all;
+		height: 50px;
+		margin-top: 5px;
+		position: absolute;
+		top: 1rem;
+		left: 1rem;
+		margin: 0;
 	}
-
 
 	.toolbar {
 		position: fixed;
@@ -1478,6 +1641,7 @@
 		z-index: 10000;
 		left: 0;
 		right: 0;
+		width: 100vw;
 		margin: 0 auto;
 		justify-content: space-between;
 		opacity: 0;
@@ -1486,7 +1650,24 @@
 		padding: 2rem;
 		background: linear-gradient(180deg, black, rgba(0,0,0,0));
 		padding-bottom: 6rem;
+		width: 100%;
+		flex-wrap: wrap;
+		height: calc(100% - 20px);
+		background: none;
+		padding: 0;
+		justify-content: flex-start;
+		flex-direction: column;
+		align-items: center;
 	}
+
+	.toolbar:before {
+		content: '';
+		height: 50px;
+		position: absolute;
+		width: 100%;
+		background: linear-gradient(180deg, black, rgba(0,0,0,0));
+	}
+
 
 	.toolbar-visible {
 		transform: translate(0,0px);
@@ -1504,6 +1685,11 @@
 		margin-left: 20px;
 		padding: 2px 10px;
 		border-radius: 5px;
+		width: 100%;
+		flex-wrap: wrap;
+		margin: 0;
+		padding: 10px;
+		width: fit-content;
 	}
 
 	.color-swatches {
@@ -1545,10 +1731,15 @@
 		width: 65px;
 		line-height: 1.2;
 		text-align: right;
+		width: 60px;
 	}
 	.color-finder span.sorted-by {
 		margin-left: 20px;
 		width: 40px;
+		margin: 0;
+		margin-right: 10px;
+		width: 60px;
+
 	}
 
 	.sort-buttons {
@@ -1574,13 +1765,6 @@
 		text-decoration: none;
 	}
 
-	.about {
-		position: fixed;
-		z-index: 10000;
-		bottom: 1rem;
-		right: 1rem;
-	}
-
 	.instructions {
 		background: #fefca8;
 		color: black;
@@ -1598,18 +1782,51 @@
 		pointer-events: none;
 		text-transform: uppercase;
 	}
+	.about {
+		background-color: black;
+		margin-left: 10px;
+		border-radius: 5px;
+		pointer-events: all;
+		display: flex;
+		align-items: center;
+	}
 
-	.about button {
+	.bottom {
+		display: flex;
+		flex-wrap: wrap;
+	}
+
+	.zoom {
+		display: flex;
+		width: 100%;
+		min-height: 40px;
+		margin-bottom: 10px;
+	}
+
+	.about button, .zoom button {
 		background: black;
 		color: white;
 		font-size: 12px;
 		text-transform: uppercase;
 		letter-spacing: .5px;
+		padding: 0 1rem;
+		height: 100%;
+	}
+
+	.zoom button {
+		padding: 0rem 1rem;
+		margin-right: 10px;
 	}
 
 	.maps-link {
 		left: 4rem;
 	}
+
+	.zoom {
+		pointer-events: all;
+		z-index: 1000000;
+	}
+
 	.helper {
 		z-index: 10000;
 		position: fixed;
@@ -1639,7 +1856,33 @@
 		margin-top: 10px;
 		animation: swipe 2s;
 		animation-iteration-count: infinite;
+	}
 
+	.keyboard-controls {
+		color: white;
+		background-color: black;
+		font-family: var(--sans);
+		pointer-events: all;
+		width: fit-content;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 0 1rem;
+		border-radius: 5px;
+	}
+
+	.keyboard-controls label {
+		background: black;
+		color: white;
+		font-size: 11px;
+		user-select: none;
+		text-transform: uppercase;
+		letter-spacing: .5px;
+		display: flex;
+	}
+
+	.keyboard-controls label input {
+		margin-right: 5px;
 	}
 
 	@keyframes swipe {
@@ -1660,96 +1903,58 @@
 		}
 	}
 
-	@media only screen and (max-width:1000px) {
-		.toolbar {
-			width: 100%;
-			flex-wrap: wrap;
-			height: calc(100% - 20px);
-			background: none;
-			padding: 0;
-			justify-content: flex-start;
-			flex-direction: column;
-			align-items: center;
-
-		}
-		.settings {
-			pointer-events: none;
-			width: calc(100% - 50px);
-			flex-direction: column;
-			flex-grow: 1;
-			justify-content: space-between;
-		}
 		
-		.toolbar:before {
-			content: '';
-			height: 50px;
-			position: absolute;
-			width: 100%;
-			background: linear-gradient(180deg, black, rgba(0,0,0,0));
+		
+	@media only screen and (max-width: 900px) {
+		.geocoder {
+			margin-top: 70px;
 		}
-		.about {
-			z-index: 1000000;
-			right: 30px;
-			bottom: 25px;
-		}
-		.toolbar-logo {
-			height: 50px;
-			margin-top: 5px;
-		}
-		.every span, .every-small span {
-			background: none;
-			padding: 0;
-		}
-
 		.color-finder {
-			width: 100%;
-			flex-wrap: wrap;
-			margin: 0;
-			padding: 10px;
+			width: 300px;
 		}
-		.color-finder span.sorted-by {
-			margin: 0;
-			margin-top: 10px;
-			margin-right: 10px;
-			width: 60px;
+		.color-finder button {
+			min-width: 20px;
 		}
-		.sort-buttons {
-			margin-top: 10px;
-		}
-		.color-finder span {
-			width: 60px;
-		}
-		.color-swatches {
-		}
-
-		.every, .every-small {
-			background-color: black;
-			padding: 10px;
-		}
-	}
-
-	@media only screen and (min-width:550px) and (max-width: 1000px) {
 		.geocoder {
 			display: flex;
 			margin-top: 1rem;
-			margin-right: 1rem;
 			justify-content: flex-end;
 		}
-		.toolbar-logo {
-			margin: 0;
-			top: 1rem;
-			left: 1rem;
-			right: auto;
-			position: absolute;
-		}
-		.color-finder {
-			width: fit-content;
+		
+		.about-keyboard {
+			margin-top: 10px;
+			margin-left: 0px;
 		}
 		.color-finder span.sorted-by {
-			margin-top: 0px;
+			margin-top: 10px;
+		}
+		.bottom {
+			flex-wrap: wrap;
+			max-width: 500px;
+		}
+		.zoom {
+			width: 300px;
 		}
 		.sort-buttons {
-			margin-top: 0px;
+			margin-top: 10px;
+		}
+		.zoom button {
+			padding: .5rem 1rem;
+		}
+		.about button {
+			padding: .5rem .5rem;
+		}
+	}
+
+	@media only screen and (max-width: 500px) {
+		.geocoder {
+			margin: 0 auto;
+			margin-top: 70px;
+		}
+		.toolbar-logo {
+			margin: 0 auto;
+			left: 0;
+			right: 0;
 		}
 	}
 

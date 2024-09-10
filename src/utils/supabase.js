@@ -11,7 +11,10 @@ export const getComments = async(courtId) => {
 		let { data, error } = await supabase
 		.from('courts_comments')
 		.select()
-		.eq('court_id', courtId)	
+		.eq('court_id', courtId)
+		.eq('moderation', true)
+		;
+
 	if (error) {
 		console.error(error)
 		return

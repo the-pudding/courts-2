@@ -2,7 +2,6 @@
 
   <script>
     import { onMount } from "svelte";
-    // import { Viewer, Cesium3DTileset, Math, Cartesian3, Matrix4 } from 'cesium'
     const GoogleKey = import.meta.env.VITE_GOOGLE;
 
     export let coords;
