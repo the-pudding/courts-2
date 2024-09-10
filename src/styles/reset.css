@@ -9,6 +9,7 @@ body {
 	word-wrap: break-word;
 	-webkit-tap-highlight-color: transparent;
 	background: #111;
+	/* background: white; */
 	width: 100vw;
 }
 

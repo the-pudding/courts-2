@@ -71,8 +71,7 @@
 
             context.clearRect(0, 0, viewportWidth*2, viewportHeight*2);
             
-            if(globeFinished){
-
+            if(globeFinished && viewportWidth > 500){
 
                 context.fillStyle = `rgba(54,53,49,${1-$cartTween})`;
                 context.beginPath();
@@ -106,7 +105,6 @@
                 path.context(context);
                 path(sphere);
                 context.fill();
-
 
                 context.fillStyle = "rgba(54,53,49,1)"
                 context.beginPath();

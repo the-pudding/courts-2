@@ -71,6 +71,11 @@
 	let el;
 	let zoom = 1;
 	let tileMinZoom = 3.99;
+
+	if(viewportWidth < 500){
+		tileMinZoom = 4.99;
+	}
+
 	let tileLayerZoom = 4.99;
 	
 	let targetDeck;
@@ -382,12 +387,16 @@
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	//   await makeTileLayer();
+	  await makeTileLayer();
 	//   await loadTestIconAtlas();
 	//   await loadText();
 
 	//   deckgl.setProps({
-	//   	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+	//   	layers: layers.concat([
+	// 		firstTileLayer,
+	// 		iconAtlasLayer,
+	// 		textLayer
+	// 	])
 	//   });
 
     }
@@ -499,7 +508,7 @@
 			debounceTime: 100,
 			id:`tileLayer_`,
 			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-			//visible: zoom > tileMinZoom,
+			// visible: zoom > 8,
 			onViewportLoad: layers => {
 				// console.log(layers,"hi")
 				let oldLength = renderedSublayers.length;
@@ -595,13 +604,14 @@
 						//[[left, bottom], [left, top], [right, top], [right, bottom]]. 
 
 
-						let imgType = "webp"
-						let imgSize = 150;
-						let imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imgSize}/${imageId}.${imgType}`
-						// if(zoom > 6){
-							imgType = "jpg";
-							imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`
-						// }
+						let imgType = "jpg"
+						let imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`
+						
+						if(viewportWidth < 500){
+							imgType = "webp";
+							let imgSize = 150;
+							imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imgSize}/${imageId}.${imgType}`
+						}
 
 						
 						const item = new BitmapLayer(props,{
@@ -609,10 +619,6 @@
 							id: `${props.id}_${imageId}_bitmap`,
 							bounds: imageCoorsFinal,//[0,5,5,0]
 							visible: zoom > tileLayerZoom,
-							// extensions: [new ClipExtension()],
-							// clipBounds: [left, bottom, right, top]
-							// pickable: false,
-							// onClick: (info, event) => console.log('Clicked:', info, event),
 						})
 
 						
@@ -622,16 +628,17 @@
 					}
 				}
 
-				if(bounds){
-					// let outline = new BitmapLayer(props,{
-					// 	image: `assets/box.png`,
-					// 	id: `${props.id}_outline`,
-					// 	bounds: [bounds[0]+1,bounds[1]+1,bounds[2]-1,bounds[3]-1]
-					// 	//bounds: [left,bottom,right,top]
-					// })
+				// console.log(props.tile)
+				// const {boundingBox} = props.tile;
 
-					// layers.push(outline);
-				}
+				// let outline = new BitmapLayer(props,{
+				// 	image: `assets/box2.png`,
+				// 	id: `${props.id}_outline`,
+				// 	bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]//[bounds[0]+1,bounds[1]+1,bounds[2]-1,bounds[3]-1]
+				// 	//bounds: [left,bottom,right,top]
+				// })
+
+				// layers.push(outline);
 
 				// renderedSublayers = [...renderedSublayers];
 
@@ -730,6 +737,7 @@
 
 		await new Promise(async(resolve, reject) => {    	
 			supaBaseData = index(await countFaves(), d => d.court_id);
+			console.log(supaBaseData)
 			resolve(supaBaseData);
 		})
 		.then((result) => {						
@@ -1135,7 +1143,7 @@
 	{#if geoJSON && spritePositionsMaster}
 		<div class="world-map">
 			<WorldMap on:finished={handleWorldFinished} {sizes} {geoJSON} courtData={spritePositionsMaster} {viewportHeight} {viewportWidth}/>
-		</div>}
+		</div>
 	{/if}
 
 	{#if supaBaseData}
@@ -1146,7 +1154,7 @@
 		</div>
 	{/if}
 
-	{#if countTweenFinished && loadingDone}
+	{#if countTweenFinished}
 		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
 			<div class="logo">
 				<a href="https://pudding.cool" target="_blank">
@@ -1157,11 +1165,17 @@
 				<span>Every Outdoor Basketball Court in the U.S.A.</span>
 			</p>	
 			<p class="every every-small">
-				<span>Help us document the stories behind every outdoor court in America.</span>
+				<span>Help us document the stories behind the 59,507 outdoor courts in America.</span>
 			</p>
-			<div class="start-button-container">
-				<button class="start-button" on:click={() => handleStartButtonClick()}>Begin Exploring</button>
-			</div>	
+			{#if !loadingDone}
+				<p class="every every-small">
+					<span>Still loading...</span>
+				</p>
+			{:else}
+				<div class="start-button-container">
+					<button class="start-button" on:click={() => handleStartButtonClick()}>Begin Exploring</button>
+				</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -1251,26 +1265,27 @@
 					>💬</button>
 				</div>
 			</div>
-		
-			<div class="about-keyboard">
-				<div class="keyboard-controls">
-					<label for="checkbox1"
-						><input
-							id="checkbox1"
-							name="checkbox"
-							type="checkbox"
-							bind:checked={keyboardControls}
-						/> Keyboard Navigation</label
-					>
+			{#if viewportWidth > 500}
+				<div class="about-keyboard">
+					<div class="keyboard-controls">
+						<label for="checkbox1"
+							><input
+								id="checkbox1"
+								name="checkbox"
+								type="checkbox"
+								bind:checked={keyboardControls}
+							/> Keyboard Navigation</label
+						>
+					</div>
+					<div class="about">
+						<button
+							on:click={() => handleAbout()}
+						>About
+				
+						</button>
+					</div>
 				</div>
-				<div class="about">
-					<button
-						on:click={() => handleAbout()}
-					>About
-			
-					</button>
-				</div>
-			</div>
+			{/if}
 		</div>
 
 	</div>
@@ -1319,8 +1334,7 @@
 	</div>
 {/if}
 
-
-{#if mounted}
+{#if mounted && viewportWidth > 500}
 	<div class="noise-overlay mounted {skipIntro ? "hide-overlay" : ''}" style="background: url(assets/noise-light.png);">
 	</div>
 {/if}
@@ -1393,11 +1407,12 @@
 		font-family: var(--sans);
 		margin: 0;
 		margin-bottom: 10px;
+
 	}
 
 	.every span, .every-small span {
-		background: none;
-		padding: 0;
+		background: black;
+		padding: .5rem 1rem;
 	}
 
 	.every-small {
@@ -1957,6 +1972,9 @@
 		}
 		.every-small, .every {
 			background-color: black;
+		}
+		.every-small span, .every span {
+			background: none;
 		}
 	}
 
