@@ -382,13 +382,13 @@
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	  await makeTileLayer();
-	  await loadTestIconAtlas();
-	  await loadText();
+	//   await makeTileLayer();
+	//   await loadTestIconAtlas();
+	//   await loadText();
 
-	  deckgl.setProps({
-	  	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-	  });
+	//   deckgl.setProps({
+	//   	layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+	//   });
 
     }
 
@@ -1093,6 +1093,8 @@
 	}
 
 	function handleStartButtonClick() {
+		makeTileLayer();
+
 		skipIntro = true;
 		rebuildGrid();
 		showHelp = true;
@@ -1137,9 +1139,9 @@
 	{/if}
 
 	{#if supaBaseData}
-		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text">
+		<div transition:fly={{y:20, duration:1000, delay:500}} class="loading-text loading-start">
 		{#if !countTweenFinished}
-			<p transition:fly={{y:20, duration:1000, delay:0}} class="every">Loading Satellite Imagery of {formatComma(Math.round($countTween*spritePositionsMaster?.length/100)*100)} of {formatComma(spritePositionsMaster?.length)} Basketball Courts</p>
+			<p transition:fly={{y:20, duration:1000, delay:0}} class="every every-start">Loading Satellite Imagery of {formatComma(Math.round($countTween*spritePositionsMaster?.length/100)*100)} of {formatComma(spritePositionsMaster?.length)} Basketball Courts</p>
 		{/if}
 		</div>
 	{/if}
@@ -1394,21 +1396,12 @@
 	}
 
 	.every span, .every-small span {
-		background-color: black;
 		background: none;
 		padding: 0;
 	}
 
-
-
-
 	.every-small {
 		font-size: 16px;
-	}
-
-	.every, .every-small {
-		background-color: black;
-		padding: 10px;
 	}
 
 	.loading-text {
@@ -1913,7 +1906,7 @@
 			width: 300px;
 		}
 		.color-finder button {
-			min-width: 20px;
+			min-width: 25px;
 		}
 		.geocoder {
 			display: flex;
@@ -1947,6 +1940,12 @@
 	}
 
 	@media only screen and (max-width: 500px) {
+		.loading-start {
+			justify-content: flex-end;
+		}
+		.loading-start .every {
+			margin-bottom: 100px;
+		}
 		.geocoder {
 			margin: 0 auto;
 			margin-top: 70px;
@@ -1955,6 +1954,9 @@
 			margin: 0 auto;
 			left: 0;
 			right: 0;
+		}
+		.every-small, .every {
+			background-color: black;
 		}
 	}
 
