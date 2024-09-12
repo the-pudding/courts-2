@@ -40,21 +40,31 @@
 	} from '@loaders.gl/textures';
 
 	
-	$: console.log(zoom)
-
-	let skipIntro = false;
-	let showEl = false;
+	let skipIntro = true;
+	let showEl = true;
 	let locationQueried = false;
-	
+	let savedData = 0;
 	let keyboardControls = false;
 	let geocoder;
 	let showHelp = false;
+	let mobileMin = 0;
+	let mobile = false;
+	let textVisibility = true;
+	let toolbarVisibility = true;
+
+	let textData;
+	if(viewportWidth < 500){
+		mobile = true;
+		mobileMin = 4
+		textVisibility = false;
+		toolbarVisibility = false;
+	}
 	
 	let sizesFiltered;
 	let courtData;
 	let loadingDone = false;
 	let swatchSet = null;
-
+	let waiting = false;
 	let colors = [
 		"rgb(45, 181, 77)",
 		"rgb(66, 102, 235)",
@@ -70,7 +80,7 @@
 	let screenCoordinates = [];
 	let el;
 	let zoom = 1;
-	let tileMinZoom = 3.99;
+	let tileMinZoom = 4.5;
 
 	if(viewportWidth < 500){
 		tileMinZoom = 4.99;
@@ -112,6 +122,40 @@
 	let courtsWithComments = {};
 
 	let courtsFaveCount = [0];
+
+
+	$: console.log(zoom)
+
+	$: if(mobile && zoom > mobileMin){
+		showTextLayer();
+	};
+
+	async function showTextLayer(){
+
+		if(loadingDone && !textVisibility && !toolbarVisibility){
+
+			waiting = true;
+			// changeWaiting(waiting);
+
+			textVisibility = true;
+			toolbarVisibility = true;
+			
+			await loadText();
+			await loadTestIconAtlas();
+
+			deckgl.setProps({
+				layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
+			});
+
+			setTimeout(() => {
+				waiting = false;
+				// changeWaiting(waiting);
+
+			},500)
+
+			console.log("show text layer",zoom,mobileMin);
+		}
+	}
 
 	function makeMasterData(toFilter,data){
 
@@ -179,7 +223,6 @@
 				if(sortValue == "comment"){
 					return b.comments - a.comments;
 				}
-				
 			})
 
 			spritePositionsMaster.forEach((d,i) => {
@@ -189,7 +232,7 @@
 				d.coordinates = [x,y];
 			})
 
-			console.log(spritePositionsMaster.slice(0,10))
+			// console.log(spritePositionsMaster.slice(0,10))
 		}
 		
 
@@ -275,105 +318,260 @@
 	
 
 	async function loadTestIconAtlas(){
-		let iconMapping = {
-			"marker": {
-				width: 1500,
-				height: 1510,
-				x:0,
-				y:0,
-				mask:false
-			}
-		};
+		return new Promise(async (resolve, reject) => {
 
-		let props = {
-			id: `IconLayer_test`,
-			getIcon: d => "marker",
-			data: spritePositionsMaster,
-			getPosition: d => d.coordinates,
-			getSize: sizes.size,
-			sizeUnits: 'common',
-			iconMapping: iconMapping,
-			iconAtlas:`assets/toolbar-3.png`,
-			transitions: {
-				getPosition: {
-					duration: 500,
+			let iconMapping = {
+				"marker": {
+					width: 1500,
+					height: 1510,
+					x:0,
+					y:0,
+					mask:false
+				}
+			};
+
+			let props = {
+				id: `IconLayer_test`,
+				getIcon: d => "marker",
+				data: spritePositionsMaster,
+				getPosition: d => d.coordinates,
+				getSize: sizes.size,
+				sizeUnits: 'common',
+				visible: textVisibility,
+				iconMapping: iconMapping,
+				iconAtlas:`assets/toolbar-3.png`,
+			};
+
+			if(!mobile){
+				props.transitions = {
+					getPosition: {
+						duration: 500,
+						easing: easeCubic
+					}
 				}
 			}
-		};
 
-		iconAtlasLayer = new IconLayer({
-			...props
+			iconAtlasLayer = new IconLayer({
+				...props
+			})
+			resolve();
 		})
-
-		// layers.push(iconLayer)
 
 	}
 
 	async function makeTextData() {
+		return new Promise(async (resolve, reject) => {
 
-		let textData = [];
+			let textData = [];
 
-		for (let item of spritePositionsMaster){
+			for (let item of spritePositionsMaster){
 
-			let likes = JSON.stringify(item.likes);
-			let comments = JSON.stringify(item.comments);
+				let likes = JSON.stringify(item.likes);
+				let comments = JSON.stringify(item.comments);
 
-			textData.push({
-				text: `${item.location}, ${item.state}`,
-				position: [item.coordinates[0]-(.48*sizes.size), item.coordinates[1]+(.44*sizes.size)],
-				size:(.08*sizes.size)
-			})
+				textData.push({
+					text: `${item.location}, ${item.state}`,
+					position: [item.coordinates[0]-(.48*sizes.size), item.coordinates[1]+(.44*sizes.size)],
+					size:(.08*sizes.size)
+				})
 
-			textData.push({
-				text: likes,
-				position: [item.coordinates[0]+(.41*sizes.size), item.coordinates[1]+(.438*sizes.size)],
-				size:(.066*sizes.size)
-			})
+				textData.push({
+					text: likes,
+					position: [item.coordinates[0]+(.41*sizes.size), item.coordinates[1]+(.438*sizes.size)],
+					size:(.066*sizes.size)
+				})
 
-			textData.push({
-				text: comments,
-				position: [item.coordinates[0]+(.41*sizes.size), item.coordinates[1]+(.314*sizes.size)],
-				size:(.066*sizes.size)
-			})
-		}
+				textData.push({
+					text: comments,
+					position: [item.coordinates[0]+(.41*sizes.size), item.coordinates[1]+(.314*sizes.size)],
+					size:(.066*sizes.size)
+				})
+			}
 
-		return textData;
+			resolve(textData);
+		})
 	}
 
 	async function loadText(){
 
-		let textData = await makeTextData();
+		return new Promise(async (resolve, reject) => {
 
-		textLayer = new TextLayer({
-			data: textData,
-			id: `TextLayer-test`,
-			getPosition: d => d.position,
-			getText: d => {
-				return d.text;
-			},
-			// fontSettings: {
-			// 	sdf:true
-			// },
-			maxWidth: 10,
-			// outlineWidth: 15,
-			// background: true,
-			// backgroundColor: [0,0,0],
-			// outlineColor: [0,0,0],
-			getAlignmentBaseline: 'top',
-			fontFamily: "-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif",
-			getAlignmentBaseline: 'center',
-			getColor: [255, 255, 255],
-			getSize: d => d.size,
-			getTextAnchor: 'start',
-			sizeUnits: 'common',
-			updateTriggers: {
-				getText: courtsFaveCount
+			let props = {
+				data: textData,
+				id: `TextLayer-test`,
+				getPosition: d => d.position,
+				getText: d => {
+					return d.text;
+				},
+				maxWidth: 10,
+				getAlignmentBaseline: 'top',
+				fontFamily: "-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif",
+				getAlignmentBaseline: 'center',
+				getColor: [255, 255, 255],
+				visible: textVisibility,
+				getSize: d => d.size,
+				getTextAnchor: 'start',
+				sizeUnits: 'common',
+				updateTriggers: {
+					getText: courtsFaveCount
+				}
+			};
+
+			if(!mobile){
+				props.transitions = {
+					getPosition: {
+						duration: 500,
+						easing: easeCubic
+					}
+				}
 			}
-		});
 
-		// layers.push(textLayer)
+			textLayer = new TextLayer({
+				...props
+			})
+			resolve();
+		})
+	}
+
+	async function changeWaiting(setting){
+		console.log(waiting)
+		if(!setting){
+			console.log("turningon")
+			deckgl.setProps({
+				controller: {
+					scrollZoom: true,
+					dragPan: true,
+					dragRotate: true,  // Rotation enabled by default
+					touchRotate: true
+				}
+      		});
+		} else {
+
+			console.log("turningOff")
+			deckgl.setProps({
+				controller: {
+					scrollZoom: false,
+					dragPan: false,
+					dragRotate: false,  // Rotation enabled by default
+					touchRotate: false
+				}
+      		});
+		}
+	}
+
+	async function fullGrid(){
+		waiting = true;
+		// changeWaiting(waiting);
+		if(mobile){
+			textVisibility = false;
+			toolbarVisibility = false;
+		}
+		
+		await assignDataToIconLayers()
+		await makeIconLayers();
+		textData = [...await makeTextData()];
+		zoomTo(1,true);
+
+		setTimeout(async() => {
+
+			await loadTestIconAtlas();
+			await loadText();
+
+			// console.log(layers)
+
+			deckgl.setProps({
+				layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+			});
+
+
+			// deckgl.setProps({
+			// 	views: new OrthographicView(),
+			// 	initialViewState: {
+			// 		target: [viewportWidth/2, viewportHeight/2, 0],
+			// 		zoom: 1,
+			// 		controller: true,
+			// 		// layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
+			// 	}
+			// })
+			
+			if(!sortValue){
+				courtsFaveCount = [courtsFaveCount[0] + 1];
+				courtsFaveCount = [...courtsFaveCount];
+			}
+
+			waiting = false;
+			// changeWaiting(waiting);
+
+		},1000)
+
 
 	}
+
+	async function rebuildGrid(){
+		let zooming;
+
+		waiting = true;
+		// changeWaiting(waiting);
+
+		await assignDataToIconLayers()
+		await makeIconLayers();
+
+		textData = await makeTextData();
+
+		if(!sortValue){
+			console.log("changing court fave count")
+			courtsFaveCount = [courtsFaveCount[0] + 1];
+			courtsFaveCount = [...courtsFaveCount];
+		}
+
+		if(sizesFiltered.rowSize !== 0){
+			zooming = Math.log2(sizesFiltered.size / sizes.size);
+			zoomTo(zooming-.2);
+		}
+
+		setTimeout(async() => {
+
+			await loadTestIconAtlas();
+			await loadText();
+			await makeTileLayer();
+
+			deckgl.setProps({
+				layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
+			});
+
+			waiting = false;
+			// changeWaiting(waiting);
+
+			
+		},1000)
+	}
+
+	async function handleStartButtonClick() {
+		await loadTestIconAtlas();
+		textData = await makeTextData();
+		await loadText();
+
+		deckgl.setProps({
+			layers: layers.concat([
+				firstTileLayer,
+				iconAtlasLayer,
+				textLayer
+			])
+		});
+
+		skipIntro = true;
+		// await assignDataToIconLayers()
+		// await makeIconLayers();
+		// await loadTestIconAtlas();
+	  	// await loadText();
+
+		showHelp = true;
+		
+		setTimeout(() => {
+			showHelp = false;
+		},6000)
+	}
+
 
 	async function loadChunks() {
       while ((chunk = await fetchNextChunk())) {
@@ -382,22 +580,22 @@
 			layers: layers
 		});
       }
-
+	  await makeTileLayer();
 
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	  await makeTileLayer();
-	//   await loadTestIconAtlas();
-	//   await loadText();
+	  await loadTestIconAtlas();
+	  textData = await makeTextData();
+	  await loadText();
 
-	//   deckgl.setProps({
-	//   	layers: layers.concat([
-	// 		firstTileLayer,
-	// 		iconAtlasLayer,
-	// 		textLayer
-	// 	])
-	//   });
+	  deckgl.setProps({
+	  	layers: layers.concat([
+			firstTileLayer,
+			iconAtlasLayer,
+			textLayer
+		])
+	  });
 
     }
 
@@ -456,13 +654,16 @@
 				mask:false,
 				sizeUnits: 'common',
 				iconMapping: spriteMap[state],
-				transitions: {
+			};
+			if(viewportWidth > 500){
+				props.transitions = {
 					getPosition: {
-						duration: 750,
-      					easing: easeCubic
+						duration: 500,
+						easing: easeCubic
 					}
 				}
-			};
+			}
+
 			layerProps.push(props);
 		}
 
@@ -500,154 +701,151 @@
 	let tilesLoaded = [];
 	
 	async function makeTileLayer(){
+		return new Promise(async (resolve, reject) => {
+			let tileLayer = new TileLayer({
+				tileSize: 256,
+				minZoom: 5,
+				debounceTime: 100,
+				id:`tileLayer_`,
+				coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+				// visible: zoom > 8,
+				onViewportLoad: layers => {
+					// console.log(layers,"hi")
+					let oldLength = renderedSublayers.length;
 
-		let tileLayer = new TileLayer({
-			tileSize: 256,
-			// zoomOffset: 5,
-			//minZoom: tileMinZoom,
-			debounceTime: 100,
-			id:`tileLayer_`,
-			coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-			// visible: zoom > 8,
-			onViewportLoad: layers => {
-				// console.log(layers,"hi")
-				let oldLength = renderedSublayers.length;
+					renderedSublayers = Array.from(layers
+						.flatMap(obj => obj.content ? obj.content : [])
+						.reduce((map, item) => {
+							if (!map.has(+item.id)) {
+								map.set(+item.id, item);
+							}
+							return map;
+						}, new Map())
+						.values())
+						;
+					if(oldLength == 0 && renderedSublayers.length > 0){
 
-				renderedSublayers = Array.from(layers
-					.flatMap(obj => obj.content ? obj.content : [])
-					.reduce((map, item) => {
-						if (!map.has(+item.id)) {
-							map.set(+item.id, item);
-						}
-						return map;
-					}, new Map())
-					.values())
-					;
-				if(oldLength == 0 && renderedSublayers.length > 0){
+						const width = viewportWidth; // Width of the viewport
+						const height = viewportHeight; // Height of the viewport
+						const target = [targetDeck[0], targetDeck[1], 0]; // Target point [x, y, z]
 
-					console.log(renderedSublayers);
+						// Calculate the bounds
+						const left = -width / 2;
+						const right = width / 2;
+						const top = height / 2;
+						const bottom = -height / 2;
 
-					// deckgl.redraw();
-		
-					const width = viewportWidth; // Width of the viewport
-					const height = viewportHeight; // Height of the viewport
-					const target = [targetDeck[0], targetDeck[1], 0]; // Target point [x, y, z]
+						// Create the orthographic view
+						const viewport = new OrthographicViewport({
+							width,
+							height,
+							left,
+							right,
+							top,
+							bottom,
+							target,
+							zoom
+						});
 
-					// Calculate the bounds
-					const left = -width / 2;
-					const right = width / 2;
-					const top = height / 2;
-					const bottom = -height / 2;
-
-					// Create the orthographic view
-					const viewport = new OrthographicViewport({
-						width,
-						height,
-						left,
-						right,
-						top,
-						bottom,
-						target,
-						zoom
-					});
-
-					updateScreenCoordinates(viewport);
-				}
-    		},
-			getTileData: async ({id, bbox,signal}) => {
-				if(zoom < tileMinZoom){
-					return null;
-				}
-				if (signal.aborted) {
-    				return null;
-  				}
-				return getData(bbox, id, signal);
-			},
-			updateTriggers: {
-				// renderSubLayers: courtsFaveCount,
-				getTileData:courtsFaveCount//[courtsFaveCount,sortValue,swatchSet,locationQueried],
-				// all:courtsFaveCount,
-			},
-			renderSubLayers: props => {
-
-				const {
-					bbox: {left, bottom, right, top}
-				} = props.tile;
-
-				let layers = [
-				]
-
-				if(props.data && props.data.length > 0){
-
-					for (let image in props.data){
-						props.data[image].tileId = props.id;
-						// let likes = JSON.stringify(props.data[image].likes);
-						// let comments = JSON.stringify(props.data[image].comments);
-						let imageId = props.data[image].id;
-						let imageCoors = props.data[image].coordinates;
-						// let imageName = `${props.data[image].location}, ${props.data[image].state}`;
-
-						// let imageCoorsFinal = [imageCoors[0],imageCoors[1],imageCoors[0],imageCoors[1]];
-						let imageCoorsFinal = [
-							imageCoors[0]-(sizes.size/2), //min x left
-							imageCoors[1]+(sizes.size/2), //max y bottom
-							imageCoors[0]+(sizes.size/2), // max x right
-							imageCoors[1]-(sizes.size/2) //min y top
-						];
-
-						// let left = imageCoors[0]-(sizes.size/2);
-						// let bottom = imageCoors[1]+(sizes.size/2);
-						// let right = imageCoors[0]+(sizes.size/2);
-						// let top = imageCoors[1]-(sizes.size/2);
-						//Coordinates of the bounding box of the bitmap [left, bottom, right, top]
-						//Coordinates of four corners of the bitmap, should follow the sequence of 
-						//[[left, bottom], [left, top], [right, top], [right, bottom]]. 
-
-
-						let imgType = "jpg"
-						let imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`
-						
-						if(viewportWidth < 500){
-							imgType = "webp";
-							let imgSize = 150;
-							imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imgSize}/${imageId}.${imgType}`
-						}
-
-						
-						const item = new BitmapLayer(props,{
-							image: imgPath,
-							id: `${props.id}_${imageId}_bitmap`,
-							bounds: imageCoorsFinal,//[0,5,5,0]
-							visible: zoom > tileLayerZoom,
-						})
-
-						
-						layers.push(item);
-
-
+						updateScreenCoordinates(viewport);
 					}
-				}
+				},
+				getTileData: async ({id, bbox,signal}) => {
+					if(zoom < tileMinZoom){
+						// console.log(id)
+						// console.log("no working")
+						return null;
+					}
+					if (signal.aborted) {
+						return null;
+					}
+					return getData(bbox, id, signal);
+				},
+				updateTriggers: {
+					renderSubLayers: courtsFaveCount,
+					getTileData:[courtsFaveCount,sortValue,swatchSet,locationQueried],
+					all:courtsFaveCount,
+				},
+				renderSubLayers: props => {
 
-				// console.log(props.tile)
-				// const {boundingBox} = props.tile;
+					const {
+						bbox: {left, bottom, right, top}
+					} = props.tile;
 
-				// let outline = new BitmapLayer(props,{
-				// 	image: `assets/box2.png`,
-				// 	id: `${props.id}_outline`,
-				// 	bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]//[bounds[0]+1,bounds[1]+1,bounds[2]-1,bounds[3]-1]
-				// 	//bounds: [left,bottom,right,top]
-				// })
+					let layers = [
+					]
 
-				// layers.push(outline);
+					if(props.data && props.data.length > 0){
 
-				// renderedSublayers = [...renderedSublayers];
+						for (let image in props.data){
+							props.data[image].tileId = props.id;
+							// let likes = JSON.stringify(props.data[image].likes);
+							// let comments = JSON.stringify(props.data[image].comments);
+							let imageId = props.data[image].id;
+							let imageCoors = props.data[image].coordinates;
+							// let imageName = `${props.data[image].location}, ${props.data[image].state}`;
 
-				return layers
-			},
+							// let imageCoorsFinal = [imageCoors[0],imageCoors[1],imageCoors[0],imageCoors[1]];
+							let imageCoorsFinal = [
+								imageCoors[0]-(sizes.size/2), //min x left
+								imageCoors[1]+(sizes.size/2), //max y bottom
+								imageCoors[0]+(sizes.size/2), // max x right
+								imageCoors[1]-(sizes.size/2) //min y top
+							];
+
+							// let left = imageCoors[0]-(sizes.size/2);
+							// let bottom = imageCoors[1]+(sizes.size/2);
+							// let right = imageCoors[0]+(sizes.size/2);
+							// let top = imageCoors[1]-(sizes.size/2);
+							//Coordinates of the bounding box of the bitmap [left, bottom, right, top]
+							//Coordinates of four corners of the bitmap, should follow the sequence of 
+							//[[left, bottom], [left, top], [right, top], [right, bottom]]. 
+
+
+							let imgType = "jpg"
+							let imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imageId}.${imgType}`
+							
+							if(viewportWidth < 500){
+								imgType = "webp";
+								let imgSize = 150;
+								imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imgSize}/${imageId}.${imgType}`
+							}
+
+							
+							if(zoom > tileMinZoom && props.tile.zoom > 3){
+								const item = new BitmapLayer(props,{
+									image: imgPath,
+									id: `${props.id}_${imageId}_bitmap`,
+									bounds: imageCoorsFinal,//[0,5,5,0]
+								})
+								layers.push(item);
+							}
+						}
+
+						// console.log(props.tile)
+						// const {boundingBox} = props.tile;
+
+						// let outline = new BitmapLayer(props,{
+						// 	image: `assets/box2.png`,
+						// 	id: `${props.id}_outline`,
+						// 	bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]//[bounds[0]+1,bounds[1]+1,bounds[2]-1,bounds[3]-1]
+						// 	//bounds: [left,bottom,right,top]
+						// })
+
+						// layers.push(outline);
+
+						}
+
+
+					// renderedSublayers = [...renderedSublayers];
+
+					return layers
+				},
+			})
+
+			firstTileLayer = tileLayer;
+			resolve();
 		})
-
-		firstTileLayer = tileLayer;
-		// layers.push(tileLayer)
 	}
 
 	async function makeIconLayers(){
@@ -776,7 +974,9 @@
 		registerLoaders(BasisLoader);
 
 		spritePositionsMaster = await makeMasterData([],courtData);
+		savedData = [...spritePositionsMaster];
 		console.log("sprite positions loaded")
+
 		spriteMap = await makeSpriteObject();
 		
 
@@ -803,16 +1003,17 @@
 			swatchSet = null;
     		await sortImages(e,false);
 			rebuildGrid();
-			// locationQueried = e.result.text;
+			const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
+			if (geocoderInput) {
+				geocoderInput.blur();
+			}
+
+
+			locationQueried = e.result.text;
 		});
 
 		geocoder.on('clear', async(e) => {
-			sortValue = null;
-			swatchSet = null;
-			// locationQueried = null;
 
-    		await sortImages(false,false);
-			rebuildGrid();
 		});
 
 		geoCoderAdded = true;
@@ -887,35 +1088,37 @@
 		});
 	})
 
-	function zoomTo(zoomLevel){
+	function zoomTo(zoomLevel,full){
 		return new Promise((resolve, reject) => {
 			console.log("zoomStart")
 			const interpolator = new LinearInterpolator({transitionProps:['zoom','target']});
 			let target = [Math.floor(sizesFiltered.rowSize*sizes.size/2), Math.floor(spritePositionsMaster.length/sizesFiltered.rowSize)*sizes.size/2, 0];
-			if(sortValue) {
-				zoomLevel = 5.5;
-				target = [0,0,0];
+			if(full) {
 
 				deckgl.setProps({
 					views: new OrthographicView(),
 					initialViewState: {
-						target: target,
-						zoom: zoomLevel,
+				 		target: [viewportWidth/2, viewportHeight/2, 0],
+						zoom: 1,
 						controller: true,
 						layers: layers,
 					},
 				});
-
-
 			}
 			else {
+
+				let transitionDuration = 1000;
+				if(spritePositionsMaster.length == courtData.length && viewportWidth < 500){
+					transitionDuration = 0;
+				}
+
 				deckgl.setProps({
 					views: new OrthographicView(),
 					initialViewState: {
 						target: target,
 						zoom: zoomLevel,
 						controller: true,
-						transitionDuration: 1000,
+						transitionDuration: transitionDuration,
 						transitionInterpolator: interpolator,
 						transitionEasing: easeCubic,
 						layers: layers,
@@ -945,14 +1148,15 @@
 		favoriteActive = true;
 
 		courtsWithFavorites[id] = (courtsWithFavorites[id] || 0) + 1;
-		courtsFaveCount = [courtsFaveCount[0] + 1];
-		courtsFaveCount = [...courtsFaveCount];
-
 
 		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
 
+		textData = [...await makeTextData()];
+
+		courtsFaveCount = [courtsFaveCount[0] + 1];
+		courtsFaveCount = [...courtsFaveCount];
+
 		await loadText();
-		
 		deckgl.setProps({
 			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 		});
@@ -978,39 +1182,19 @@
 
 		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
 
-		await loadText();
-		
-		deckgl.setProps({
-			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-		});
-	}
-
-	async function rebuildGrid(){
-		let zooming;
-		
-		if(sizesFiltered.rowSize == 0){
-			// zooming = 0;
-		} else {
-			zooming = Math.log2(sizesFiltered.size / sizes.size);
-			zoomTo(zooming-.2);
-		} 
-		
-
-		await assignDataToIconLayers()
-		await makeIconLayers();
-		// await makeTileLayer();
-		await loadTestIconAtlas();
-	  	await loadText();
-
-		deckgl.setProps({
-			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-		});
+		textData = [...await makeTextData()];
 
 		courtsFaveCount = [courtsFaveCount[0] + 1];
 		courtsFaveCount = [...courtsFaveCount];
 
+		await loadText();
+		deckgl.setProps({
+			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+		});
 
 	}
+
+	
 
 
 	function sortImages(locationData,colorData){
@@ -1050,7 +1234,7 @@
 		locationQueried = null;
 
 		await sortImages(false,false);
-		rebuildGrid();
+		fullGrid();
 	}
 
 	async function handleKeyboardButtonPress(button,box,event){
@@ -1082,6 +1266,27 @@
 			zoomTo(zoom + 1);
 		}
 	}
+
+	async function handleClear(){
+		geocoder.setInput('');
+		sortValue = null;
+		locationQueried = null;
+
+		sortValue = null;
+		swatchSet = null;
+		// let beforeLength = spritePositionsMaster.length;
+		spritePositionsMaster = savedData;
+		fullGrid();
+
+
+
+		// await sortImages(false,false);
+		// let afterLength = spritePositionsMaster.length;
+		// if(beforeLength !== afterLength){
+		// 	rebuildGrid();
+		// }
+	}
+
 	async function handleColorClick(colorSet){
 		sortValue = null;
 		geocoder.setInput('');
@@ -1095,21 +1300,11 @@
 		}
 		else {
 			swatchSet = null;
-			await sortImages(false,false);
-			rebuildGrid();
+			spritePositionsMaster = savedData;
+			fullGrid();
 		}
 	}
 
-	function handleStartButtonClick() {
-		makeTileLayer();
-
-		skipIntro = true;
-		rebuildGrid();
-		showHelp = true;
-		setTimeout(() => {
-			showHelp = false;
-		},6000)
-	}
 
 	function handleWorldFinished() {
 		console.log("world finished")
@@ -1183,6 +1378,16 @@
 </div>
 {/if}
 
+{#if waiting}
+	<div class="waiting"
+		transition:fade={{duration:500}}
+	>
+		<p class="every every-small">
+			<span>Loading...</span>
+		</p>
+	</div>
+{/if}
+
 
 
 
@@ -1219,6 +1424,16 @@
 	
 	<div class="settings">
 		<div bind:this={inputBox} id="geocoder" class="geocoder">
+			{#if locationQueried}
+				<div class="location-queried">
+					<button
+						on:click={() => handleClear()}
+					>
+						{locationQueried.length > 15 ? locationQueried.slice(0,12).concat("...") : locationQueried}
+						<svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 8 8" width="8px" height="8px" xml:space="preserve" class="svelte-1x4usti"><path d="M0.5,8C0.37,8,0.24,7.95,0.15,7.85c-0.2-0.2-0.2-0.51,0-0.71l7-7c0.2-0.2,0.51-0.2,0.71,0s0.2,0.51,0,0.71l-7,7 C0.76,7.95,0.63,8,0.5,8z"></path><path d="M7.5,8C7.37,8,7.24,7.95,7.15,7.85l-7-7c-0.2-0.2-0.2-0.51,0-0.71s0.51-0.2,0.71,0l7,7c0.2,0.2,0.2,0.51,0,0.71 C7.76,7.95,7.63,8,7.5,8z"></path></svg>
+					</button>
+				</div>
+			{/if}
 		</div>
 
 
@@ -1593,11 +1808,14 @@
 		width: 100%;
 	}
 
+
+
 	.geocoder {
 		pointer-events: all;
 		margin-inline-start: auto;
 		margin-top: 1rem;
 		margin-right: 1rem;
+		position: relative;
 	}
 	
 
@@ -1858,6 +2076,27 @@
 		text-shadow: -3px -3px 1px rgba(0,0,0, 0.05), -3px -2px 1px rgba(0,0,0, 0.05), -3px -1px 1px rgba(0,0,0, 0.05), -3px 0px 1px rgba(0,0,0, 0.05), -3px 1px 1px rgba(0,0,0, 0.05), -3px 2px 1px rgba(0,0,0, 0.05), -3px 3px 1px rgba(0,0,0, 0.05), -2px -3px 1px rgba(0,0,0, 0.05), -2px -2px 1px rgba(0,0,0, 0.05), -2px -1px 1px rgba(0,0,0, 0.05), -2px 0px 1px rgba(0,0,0, 0.05), -2px 1px 1px rgba(0,0,0, 0.05), -2px 2px 1px rgba(0,0,0, 0.05), -2px 3px 1px rgba(0,0,0, 0.05), -1px -3px 1px rgba(0,0,0, 0.05), -1px -2px 1px rgba(0,0,0, 0.05), -1px -1px 1px rgba(0,0,0, 0.05), -1px 0px 1px rgba(0,0,0, 0.05), -1px 1px 1px rgba(0,0,0, 0.05), -1px 2px 1px rgba(0,0,0, 0.05), -1px 3px 1px rgba(0,0,0, 0.05), 0px -3px 1px rgba(0,0,0, 0.05), 0px -2px 1px rgba(0,0,0, 0.05), 0px -1px 1px rgba(0,0,0, 0.05), 0px 1px 1px rgba(0,0,0, 0.05), 0px 2px 1px rgba(0,0,0, 0.05), 0px 3px 1px rgba(0,0,0, 0.05), 1px -3px 1px rgba(0,0,0, 0.05), 1px -2px 1px rgba(0,0,0, 0.05), 1px -1px 1px rgba(0,0,0, 0.05), 1px 0px 1px rgba(0,0,0, 0.05), 1px 1px 1px rgba(0,0,0, 0.05), 1px 2px 1px rgba(0,0,0, 0.05), 1px 3px 1px rgba(0,0,0, 0.05), 2px -3px 1px rgba(0,0,0, 0.05), 2px -2px 1px rgba(0,0,0, 0.05), 2px -1px 1px rgba(0,0,0, 0.05), 2px 0px 1px rgba(0,0,0, 0.05), 2px 1px 1px rgba(0,0,0, 0.05), 2px 2px 1px rgba(0,0,0, 0.05), 2px 3px 1px rgba(0,0,0, 0.05), 3px -3px 1px rgba(0,0,0, 0.05), 3px -2px 1px rgba(0,0,0, 0.05), 3px -1px 1px rgba(0,0,0, 0.05), 3px 0px 1px rgba(0,0,0, 0.05), 3px 1px 1px rgba(0,0,0, 0.05), 3px 2px 1px rgba(0,0,0, 0.05), 3px 3px 1px rgba(0,0,0, 0.05);
 	}
 
+	.waiting {
+		width: 100%;
+		height: 100%;
+		z-index: 1000000;
+		position: fixed;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		background: rgba(0, 0, 0, .7);
+		pointer-events: none;
+		cursor: help;
+		pointer-events: all;
+	}
+
+	.waiting .every {
+		color: white;
+		font-family: var(--sans);
+		font-size: 18px;
+		text-align: center;
+	}
+
 	.finger {
 		width: 40px;
 		margin: 0 auto;
@@ -1877,6 +2116,32 @@
 		justify-content: center;
 		padding: 0 1rem;
 		border-radius: 5px;
+	}
+
+	.location-queried {
+		position: absolute;
+		top: 45px;
+		left: 0;
+		width: 100%;
+		box-shadow: 0 10px 2px rgba(0,0,0,.1);
+	}
+
+	.location-queried button {
+		max-width: 100%;
+		width: 100%;
+		background-color: #c4c4c4;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 14px;
+		font-weight: 500;
+		border-radius: 3px;
+	}
+
+	.location-queried button svg {
+		margin-left: 12px;
+		width: 10px;
+		height: 10px;
 	}
 
 	.keyboard-controls label {
@@ -1912,7 +2177,11 @@
 	}
 
 		
-		
+	@media only screen and (max-width: 640px) {
+		.location-queried {
+			top: 47px;
+		}
+	}
 	@media only screen and (max-width: 900px) {
 		.geocoder {
 			margin-top: 70px;
