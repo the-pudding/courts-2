@@ -40,8 +40,8 @@
 	} from '@loaders.gl/textures';
 
 	
-	let skipIntro = true;
-	let showEl = true;
+	let skipIntro = false;
+	let showEl = false;
 	let locationQueried = false;
 	let savedData = 0;
 	let keyboardControls = false;
@@ -547,6 +547,7 @@
 	}
 
 	async function handleStartButtonClick() {
+
 		await loadTestIconAtlas();
 		textData = await makeTextData();
 		await loadText();
@@ -585,17 +586,17 @@
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	  await loadTestIconAtlas();
-	  textData = await makeTextData();
-	  await loadText();
+	//   await loadTestIconAtlas();
+	//   textData = await makeTextData();
+	//   await loadText();
 
-	  deckgl.setProps({
-	  	layers: layers.concat([
-			firstTileLayer,
-			iconAtlasLayer,
-			textLayer
-		])
-	  });
+	//   deckgl.setProps({
+	//   	layers: layers.concat([
+	// 		firstTileLayer,
+	// 		iconAtlasLayer,
+	// 		textLayer
+	// 	])
+	//   });
 
     }
 
