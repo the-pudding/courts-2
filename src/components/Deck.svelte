@@ -46,11 +46,14 @@
 	let savedData = 0;
 	let keyboardControls = false;
 	let geocoder;
+	let hover = false;
 	let showHelp = false;
 	let mobileMin = 0;
 	let mobile = false;
 	let textVisibility = true;
+	let show3D = false;
 	let toolbarVisibility = true;
+	let hoverable = false;
 
 	let textData;
 	if(viewportWidth < 500){
@@ -396,6 +399,8 @@
 
 		return new Promise(async (resolve, reject) => {
 
+			console.log(textData,textVisibility);
+
 			let props = {
 				data: textData,
 				id: `TextLayer-test`,
@@ -469,7 +474,8 @@
 		
 		await assignDataToIconLayers()
 		await makeIconLayers();
-		textData = [...await makeTextData()];
+		textData = await makeTextData();
+
 		zoomTo(1,true);
 
 		setTimeout(async() => {
@@ -989,15 +995,13 @@
 		geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2x5YzVlcXZ4MW1qajJsb3RoeWI0bzhmZyJ9.DY653tAkLZCDMMEPuFvoGA',
 			types: 'region,postcode,district,place,neighborhood',
-			countries: "us",
 			options: {
 				marker: false,
-				countries: "us"
 			}
 		});
 		geocoder.addTo(inputBox)
 		geocoder.setPlaceholder("Search for a location...")
-		geocoder.setCountries("us")
+		geocoder.setCountries("pr,us");
 
 		geocoder.on('result', async(e) => {
 			sortValue = null;
@@ -1013,10 +1017,6 @@
 			locationQueried = e.result.text;
 		});
 
-		geocoder.on('clear', async(e) => {
-
-		});
-
 		geoCoderAdded = true;
 
 		deckgl = new Deck({
@@ -1028,6 +1028,48 @@
 				transitionInterpolator: new LinearInterpolator(['zoom','target']),
 			    transitionDuration: 1000
 			},
+			getCursor: ({ isDragging }) => {
+				if(hoverable){
+					return "pointer";
+				}
+				return isDragging ? "grabbing" : "grab"
+			},
+			onHover: ({x,y}) => {
+				if(!mobile){
+					let selected = screenCoordinates.filter(d => {
+						let box = [d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth];
+						return (box[0] < x && box[1] > x) && (box[2] < y && y < box[3])
+					})
+
+					if(selected.length > 0){
+						let image = selected[0];
+						let xPercent = (x-image.screenPosition[0])/image.screenWidth;
+						let yPercent = (y-image.screenPosition[1])/image.screenWidth;
+
+						if(xPercent > .79){
+							// console.log("valid")
+							if(yPercent > .89){
+								hoverable = true;
+							}
+							else if(yPercent > .75){
+								hoverable = true;
+							}
+						}
+						else if (xPercent < .1 && yPercent < .13){
+							hoverable = true;
+						}
+						else {
+							hoverable = false;
+						}
+					}
+					else {
+						hoverable = false;
+					}
+
+
+
+				}
+			},
 			onClick: ({x,y}) => {
 				console.log(x,y)
 
@@ -1035,8 +1077,6 @@
 					let box = [d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth];
 					return (box[0] < x && box[1] > x) && (box[2] < y && y < box[3])
 				})
-
-				// console.log(x,y,selected.length,screenCoordinates,renderedSublayers,selected)
 
 				if(selected.length > 0){
 					let image = selected[0];
@@ -1152,7 +1192,7 @@
 
 		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
 
-		textData = [...await makeTextData()];
+		textData = await makeTextData();
 
 		courtsFaveCount = [courtsFaveCount[0] + 1];
 		courtsFaveCount = [...courtsFaveCount];
@@ -1272,6 +1312,7 @@
 		geocoder.setInput('');
 		sortValue = null;
 		locationQueried = null;
+		filteredIds = []
 
 		sortValue = null;
 		swatchSet = null;
@@ -1317,9 +1358,8 @@
 
 
 {#if $isThreeD == true}
-	<div in:fly={{y:-20, duration:500}} class="three-d">
+	<div in:fly={{y:-20, duration:500}} class="three-d" class:show3D>
 		<button class="three-d-close" on:click={() => {
-			console.log("button click")
 			$isThreeD = false;
 		}}>Close</button>
 		<a target="_blank" href="http://maps.google.com/maps?q={threeDNode[1]},{threeDNode[0]}">
@@ -1327,8 +1367,19 @@
 				↗️ Google Maps
 			</button>
 		</a>
-		<p class="instructions">Explore by Pan and Zooming</p>
-		<ThreeD coords={threeDNode}/>
+		{#if mobile && !show3D}
+			<button class="show-3d-link maps-link"
+			on:click={() => {
+				show3D = true;
+			}}
+			>
+				Show 3D (experimental)
+			</button>
+		{/if}
+		{#if !mobile || show3D}
+			<p class="instructions">Explore by Pan and Zooming</p>
+			<ThreeD coords={threeDNode}/>
+		{/if}
 	</div>
 {/if}
 
@@ -1784,6 +1835,7 @@
 		bottom: 50px;
 		left: 50px;
 		border: 2px solid #fffca8;
+		background-color: #fffca8;
 	}
 	.overlay {
 		position: fixed;
@@ -1817,6 +1869,7 @@
 		margin-top: 1rem;
 		margin-right: 1rem;
 		position: relative;
+		touch-action: none;
 	}
 	
 
@@ -2021,6 +2074,7 @@
 	.bottom {
 		display: flex;
 		flex-wrap: wrap;
+		touch-action: none;
 	}
 
 	.zoom {
@@ -2139,6 +2193,12 @@
 		border-radius: 3px;
 	}
 
+
+	.show-3d-link {
+		top: 3rem;
+		left: 10px;
+	}
+
 	.location-queried button svg {
 		margin-left: 12px;
 		width: 10px;
@@ -2225,6 +2285,15 @@
 	}
 
 	@media only screen and (max-width: 500px) {
+		.three-d {
+			width: 300px;
+			height: 100px;
+		}
+
+		.three-d.show3D {
+			width:300px;
+			height: 300px;
+		}
 		.loading-start {
 			justify-content: flex-end;
 		}
