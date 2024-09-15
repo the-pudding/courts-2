@@ -1,7 +1,7 @@
 import { point, pointsWithinPolygon, bboxPolygon } from "@turf/turf";
 
 export default function filterLocation(courts,location,filterType) {
-
+    console.log(location)
     if(filterType == "bbox"){
         let locationBbox = location.result.bbox;
         let polygonToSearch = bboxPolygon(locationBbox);
@@ -16,8 +16,8 @@ export default function filterLocation(courts,location,filterType) {
             "features":pointArray
         };
 
-        console.log(pointArray)
-        console.log(polygonToSearch)
+        // console.log(pointArray)
+        // console.log(polygonToSearch)
 
         let ptsWithin = pointsWithinPolygon(pointArray, polygonToSearch).features.map(d => {
             return d.properties.id;

@@ -1004,17 +1004,20 @@
 		geocoder.setCountries("pr,us");
 
 		geocoder.on('result', async(e) => {
-			sortValue = null;
-			swatchSet = null;
-    		await sortImages(e,false);
-			rebuildGrid();
-			const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
-			if (geocoderInput) {
-				geocoderInput.blur();
+			if("result".indexOf(Object.keys(e)) > -1){
+				sortValue = null;
+				swatchSet = null;
+				await sortImages(e,false);
+				rebuildGrid();
+				const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
+				if (geocoderInput) {
+					geocoderInput.blur();
+				}
+
+				locationQueried = e.result.text;
+
 			}
 
-
-			locationQueried = e.result.text;
 		});
 
 		geoCoderAdded = true;
@@ -1145,6 +1148,17 @@
 						layers: layers,
 					},
 				});
+			}
+			else if (mobile){
+				deckgl.setProps({
+					views: new OrthographicView(),
+					initialViewState: {
+						target: target,
+						zoom: zoomLevel,
+						controller: true,
+						layers: layers,
+					}
+				})
 			}
 			else {
 
