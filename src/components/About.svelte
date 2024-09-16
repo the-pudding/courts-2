@@ -13,8 +13,10 @@
 
 <div class="about">
     <button class="close" on:click={modalClose}>Close</button>
-    <p>By <a target="_blank" href="https://pudding.cool/author/matt-daniels/">Matthew Daniels</a>, for visual journalism publication <a href="https://pudding.cool/">The Pudding</a> Reach out at matt@pudding.cool</p>
-    <p>Court Locations via <a href="https://www.openstreetmap.org/#map=4/38.01/-95.84">Open Street Map</a>. Satellite imagery via Google.</p>
+    <p>By <a target="_blank" href="https://pudding.cool/author/matt-daniels/">Matthew Daniels</a>, for visual journalism publication <a href="https://pudding.cool/">The Pudding</a>.</p>
+    <p>Reach out at matt@pudding.cool</p>
+    <p>Court Locations via <a href="https://www.openstreetmap.org/#map=4/38.01/-95.84">Open Street Map</a>. Satellite imagery via Google. Notable prior art in satellite imagery: Joshua Begley&rsquo;s <a href='https://www.studioptcd.com/reference-projects/prison-map' target='_blank'>Prison Map</a> (currently offline), <a href='https://theintercept.co/officer-involved/' target='_blank'>Officer Involved</a>, and <a href='https://projects.theintercept.com/fatal-migrations/' target='_blank'>Fatal Migrations</a>, as well as Jenny Odell&rsquo;s <a href='https://www.jennyodell.com/satellite.html' target='_blank'>Satellite Collections</a>.</p>
+    <p>If you like this project, consider supporting <a href="https://www.instagram.com/project_backboard/" target="_blank">Project Backboard</a>, a non-profit that painted/renovated many of the courts seen in the satellite imagery.</p>
 </div>
 
 <style>
@@ -39,7 +41,11 @@
         
         font-family: var(--sans);
         text-align: left;
-        font-size: 16px;
+        font-size: 14px;
+        font-weight: 400;
+        -webkit-font-smoothing: antialiased;
+  		-moz-osx-font-smoothing: grayscale;
+
     }
 
     .close {

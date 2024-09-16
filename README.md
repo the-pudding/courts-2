@@ -1,3 +1,8 @@
+To do:
+
+
+
+
 *SPEED
 Remove so many images from loading in tilelayer
 Use Cullrect on deckgl?
