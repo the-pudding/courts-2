@@ -1001,7 +1001,7 @@
 		});
 		geocoder.addTo(inputBox)
 		geocoder.setPlaceholder("Search for a location...")
-		geocoder.setCountries("pr,us");
+		geocoder.setCountries("pr,us,vi,gu");
 
 		geocoder.on('result', async(e) => {
 			if("result".indexOf(Object.keys(e)) > -1){
