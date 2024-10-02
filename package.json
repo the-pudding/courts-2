@@ -47,6 +47,7 @@
 		"@loaders.gl/core": "^4.2.0-alpha.6",
 		"@loaders.gl/images": "^4.2.0-alpha.6",
 		"@loaders.gl/textures": "^4.2.0-alpha.6",
+		"mapbox-gl": "^3.2.0",
 		"@mapbox/mapbox-gl-geocoder": "^5.0.2",
 		"@mapbox/search-js-web": "^1.0.0-beta.19",
 		"@supabase/supabase-js": "^2.43.4",

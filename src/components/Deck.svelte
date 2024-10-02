@@ -3,7 +3,7 @@
 	import { easeCubic, index, format, csv } from "d3";
 	import filterLocation from '$actions/filterAddresses.js'
 	import filterColor from '$actions/filterColors.js';
-	import {Deck, OrthographicView, OrthographicViewport, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
+	import {MapController, Deck, OrthographicView, OrthographicViewport, COORDINATE_SYSTEM, LinearInterpolator} from '@deck.gl/core';
 	import {IconLayer, BitmapLayer, TextLayer} from '@deck.gl/layers';
 	import {TileLayer} from '@deck.gl/geo-layers';
 	import { fly, fade } from 'svelte/transition';
@@ -13,6 +13,10 @@
 	import calcSquareSizeFiltered from "$actions/getMaxSizeSquareFiltered.js"
 	import Mark from "$svg/mark.svg";
 	import About from "$components/About.svelte"
+
+	import mapboxgl from "mapbox-gl";
+	import "mapbox-gl/dist/mapbox-gl.css";
+
 
 	import ThreeD from "$components/ThreeD.svelte"
 	import Comment from "$components/Comment.svelte"
@@ -38,10 +42,10 @@
 		BasisLoader,
 		selectSupportedBasisFormat
 	} from '@loaders.gl/textures';
-
+	import viewport from "../stores/viewport";
 	
-	let skipIntro = false;
-	let showEl = false;
+	let skipIntro = true;
+	let showEl = true;
 	let locationQueried = false;
 	let savedData = 0;
 	let keyboardControls = false;
@@ -50,10 +54,13 @@
 	let showHelp = false;
 	let mobileMin = 0;
 	let mobile = false;
+	let mapBoxZoom;
 	let textVisibility = true;
 	let show3D = false;
 	let toolbarVisibility = true;
 	let hoverable = false;
+
+	let mapBoxVisible = false;
 
 	let textData;
 	if(viewportWidth < 500){
@@ -114,7 +121,7 @@
 	let spriteMap = {};
 	let supaBaseData;
 	let geoCoderAdded;
-	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+	let states = [0]//,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
 	let bitmapSublayers = [];
@@ -125,6 +132,9 @@
 	let courtsWithComments = {};
 
 	let courtsFaveCount = [0];
+	let mapBoxMap;
+
+	let moveEndTimeout;
 
 
 	$: console.log(zoom)
@@ -133,6 +143,76 @@
 		showTextLayer();
 	};
 
+	async function createMapBox(){
+
+		// await makeTileLayer();
+
+		// let layersToMake = [firstTileLayer];		
+		// deckgl.setProps({
+		// 	layers: layers.concat(layersToMake),
+		// });
+
+
+		mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN_DEV;
+
+		mapBoxMap = new mapboxgl.Map({
+			container: "mapbox-map-container",
+			interactive: true,
+			style: 'mapbox://styles/dock4242/cm1p1kdvj00d501pd7l4g1dc5', // style URL
+	        center: [-74, 40.7], // starting position [lng, lat]
+    	    zoom: 9 // starting zoom
+		});
+		
+		mapBoxMap.on('zoom', async() => {
+			mapBoxZoom = mapBoxMap.getZoom();
+		})
+
+		mapBoxMap.on('movestart', () => {
+			waiting = true;
+		})
+
+
+		mapBoxMap.on('moveend', async() => {
+    		if(moveEndTimeout){
+				console.log("clearing timeout")
+				clearTimeout(moveEndTimeout);
+			}
+
+			moveEndTimeout = setTimeout(async() => {
+				console.log("timeout triggered")
+
+				let bounds = mapBoxMap.getBounds();
+				let locationData = {result:{bbox:[bounds["_sw"].lng,bounds["_sw"].lat,bounds["_ne"].lng, bounds["_ne"].lat]}};
+				
+				
+				if(mapBoxZoom > 10){
+					await sortImages(locationData,false);
+					console.log(spritePositionsMaster.length)
+					rebuildGrid();
+				}
+				
+				
+			
+			},2000)
+		});
+
+		spritePositionsMaster = await makeMasterData([],courtData);
+		// rebuildGrid();
+
+		deckgl.setProps({
+	  		controller: {
+    			scrollZoom: false,  // Disable zoom on scroll/two-finger swipe
+    			dragPan: true,
+				touchZoom: false,
+				doubleClickZoom: false,
+				touchRotate:false,
+				dragRotate: false,
+      		}
+		});
+
+	}
+
+	
 	async function showTextLayer(){
 
 		if(loadingDone && !textVisibility && !toolbarVisibility){
@@ -176,7 +256,14 @@
 			spritePositionsMaster = data.map(d => d);
 		}
 
-		sizesFiltered = calcSquareSizeFiltered(viewportWidth,viewportHeight,spritePositionsMaster.length,10);
+		let width = viewportWidth;
+		let height = viewportHeight;
+
+		if(mapBoxVisible){
+			width = viewportWidth;
+		}
+
+		sizesFiltered = calcSquareSizeFiltered(width,height,spritePositionsMaster.length,10,mapBoxVisible);
 
 		let squareSize = sizesFiltered.rowSize;
 
@@ -202,6 +289,10 @@
 
 			let x = (i % squareSize) * sizes.size + (i % squareSize)*.1// + Math.random()*1;
 			let y = Math.floor(i/squareSize) * sizes.size + Math.floor(i/squareSize)*.1// + Math.random() * 1;
+			// if(mapBoxVisible){
+			// 	x = i * sizes.size + i*.1
+			// 	y = 0
+			// }
 
 			return {
 				"coordinates":[x,y],
@@ -517,12 +608,16 @@
 		let zooming;
 
 		waiting = true;
-		// changeWaiting(waiting);
 
-		await assignDataToIconLayers()
-		await makeIconLayers();
-
-		textData = await makeTextData();
+		if(!mapBoxVisible){
+			await assignDataToIconLayers()
+			await makeIconLayers();
+			textData = await makeTextData();
+		}
+		else {
+			layers = [];
+			textData = await makeTextData();
+		}
 
 		if(!sortValue){
 			console.log("changing court fave count")
@@ -530,26 +625,46 @@
 			courtsFaveCount = [...courtsFaveCount];
 		}
 
-		if(sizesFiltered.rowSize !== 0){
+		if(sizesFiltered.rowSize !== 0 && !mapBoxVisible){
 			zooming = Math.log2(sizesFiltered.size / sizes.size);
-			zoomTo(zooming-.2);
+			zoomTo(zooming-.2,false);
+		}
+		else if(mapBoxVisible) {
+			zooming = Math.log2(sizesFiltered.size / sizes.size);
+			zoomTo(zooming,false);
 		}
 
+		await makeTileLayer();
+		await loadText();
+		await loadTestIconAtlas();
+
+
+		deckgl.setProps({
+			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
+		});
+
 		setTimeout(async() => {
+		// 	if(!mapBoxVisible){
+		// 		await loadTestIconAtlas();
+		// 		await loadText();
+		// 	}
 
-			await loadTestIconAtlas();
-			await loadText();
-			await makeTileLayer();
+		// 	await makeTileLayer();
 
-			deckgl.setProps({
-				layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
-			});
+		// 	let layersToMake = [firstTileLayer];
+		// 	if(!mapBoxVisible){
+		// 		layersToMake = [firstTileLayer,iconAtlasLayer,textLayer];
+		// 	}
+			
+		// 	deckgl.setProps({
+		// 		layers: layers.concat(layersToMake),
+		// 	});
 
 			waiting = false;
-			// changeWaiting(waiting);
+		// 	// changeWaiting(waiting);
 
 			
-		},1000)
+		},100)
 	}
 
 	async function handleStartButtonClick() {
@@ -587,7 +702,7 @@
 			layers: layers
 		});
       }
-	  await makeTileLayer();
+	//   await makeTileLayer();
 
 	  loadingDone = true;
 	  console.log("loading done")
@@ -651,6 +766,14 @@
       	}
 	}
 
+	function applyViewStateConstraints(viewState) {
+  		return {
+			...viewState,
+			target:[Math.max(-100000,viewState.target[0]),0]
+	  	};
+}
+
+
 	async function makeIconLayersProps(){
 		for (let state of states){
 			let props = {
@@ -709,15 +832,17 @@
 	
 	async function makeTileLayer(){
 		return new Promise(async (resolve, reject) => {
+
 			let tileLayer = new TileLayer({
-				tileSize: 256,
-				minZoom: 5,
+				tileSize: 512,
+				// minZoom: 5,
 				debounceTime: 100,
+				courtsFaveCount,
 				id:`tileLayer_`,
 				coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-				// visible: zoom > 8,
 				onViewportLoad: layers => {
-					// console.log(layers,"hi")
+					console.log(layers,"hi")
+
 					let oldLength = renderedSublayers.length;
 
 					renderedSublayers = Array.from(layers
@@ -730,7 +855,7 @@
 						}, new Map())
 						.values())
 						;
-					if(oldLength == 0 && renderedSublayers.length > 0){
+					if(oldLength == 0 && renderedSublayers.length > 0 && targetDeck){
 
 						const width = viewportWidth; // Width of the viewport
 						const height = viewportHeight; // Height of the viewport
@@ -758,7 +883,7 @@
 					}
 				},
 				getTileData: async ({id, bbox,signal}) => {
-					if(zoom < tileMinZoom){
+					if(zoom < tileMinZoom && !mapBoxVisible){
 						// console.log(id)
 						// console.log("no working")
 						return null;
@@ -769,9 +894,9 @@
 					return getData(bbox, id, signal);
 				},
 				updateTriggers: {
-					renderSubLayers: courtsFaveCount,
-					getTileData:[courtsFaveCount,sortValue,swatchSet,locationQueried],
-					all:courtsFaveCount,
+					renderSubLayers: [courtsFaveCount],
+					getTileData:[courtsFaveCount],//[courtsFaveCount,sortValue,swatchSet,locationQueried,mapBoxZoom],
+					// all:courtsFaveCount,
 				},
 				renderSubLayers: props => {
 
@@ -818,8 +943,7 @@
 								imgPath = `https://s3.amazonaws.com/pudding.cool/projects/courts/${imgType}/${imgSize}/${imageId}.${imgType}`
 							}
 
-							
-							if(zoom > tileMinZoom && props.tile.zoom > 3){
+							if(zoom > tileMinZoom && props.tile.zoom > 3 || mapBoxVisible){
 								const item = new BitmapLayer(props,{
 									image: imgPath,
 									id: `${props.id}_${imageId}_bitmap`,
@@ -830,7 +954,11 @@
 						}
 
 						// console.log(props.tile)
-						// const {boundingBox} = props.tile;
+						
+
+					}
+
+					const {boundingBox} = props.tile;
 
 						// let outline = new BitmapLayer(props,{
 						// 	image: `assets/box2.png`,
@@ -840,8 +968,6 @@
 						// })
 
 						// layers.push(outline);
-
-						}
 
 
 					// renderedSublayers = [...renderedSublayers];
@@ -893,6 +1019,7 @@
 
 	async function getData(bbox, id, signal) {
   		// Stall for 20ms - simulate an async request
+		console.log("getting data")
   		await new Promise(resolve => setTimeout(resolve, 100));
 
 		if(!courtData){
@@ -909,9 +1036,16 @@
 		for (let i = 0; i < spritePositionsMaster.length; i++) {
 			const d = spritePositionsMaster[i];
 			const [x, y] = d.coordinates;
-			if ((x + sizes.size/2) >= left && (x + sizes.size/2) <= right && (y + sizes.size/2) >= top && (y + sizes.size/2) <= bottom) {
-				highResData.push(d);
+			if(mapBoxVisible){
+				if (x >= left && x <= right && y >= top && y <= bottom) {
+					highResData.push(d);
+				}
+			} else {
+				if ((x + sizes.size/2) >= left && (x + sizes.size/2) <= right && (y + sizes.size/2) >= top && (y + sizes.size/2) <= bottom) {
+					highResData.push(d);
+				}
 			}
+			
 		}
 
 		return highResData
@@ -928,7 +1062,14 @@
 			resolve(data);
 		});
 
-		sizes = calcSquareSize(viewportWidth,viewportHeight,courtData.length,10);
+		let width = viewportWidth;
+		let height = viewportHeight;
+
+		if(mapBoxVisible){
+			width = 200;
+		}
+
+		sizes = calcSquareSize(width,height,courtData.length,10);
 		
 		await new Promise(async(resolve, reject) => { 
 			const response = await fetch('assets/land-110m.json');
@@ -985,12 +1126,10 @@
 		console.log("sprite positions loaded")
 
 		spriteMap = await makeSpriteObject();
-		
-
-
+	
 		await makeIconLayersProps();
 		await assignDataToIconLayers()
-		await makeIconLayers();
+		// await makeIconLayers();
 
 		geocoder = new MapboxGeocoder({
 			accessToken: 'pk.eyJ1IjoiZG9jazQyNDIiLCJhIjoiY2x5YzVlcXZ4MW1qajJsb3RoeWI0bzhmZyJ9.DY653tAkLZCDMMEPuFvoGA',
@@ -999,6 +1138,7 @@
 				marker: false,
 			}
 		});
+
 		geocoder.addTo(inputBox)
 		geocoder.setPlaceholder("Search for a location...")
 		geocoder.setCountries("pr,us,vi,gu");
@@ -1007,14 +1147,22 @@
 			if("result".indexOf(Object.keys(e)) > -1){
 				sortValue = null;
 				swatchSet = null;
-				await sortImages(e,false);
-				rebuildGrid();
-				const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
-				if (geocoderInput) {
-					geocoderInput.blur();
-				}
 
-				locationQueried = e.result.text;
+
+
+				if(!mapBoxVisible){
+					await sortImages(e,false);
+					rebuildGrid();
+					const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
+					if (geocoderInput) {
+						geocoderInput.blur();
+					}
+
+					locationQueried = e.result.text;
+				}
+				else {
+					mapBoxMap.fitBounds(e.result.bbox)
+				}
 
 			}
 
@@ -1110,8 +1258,18 @@
 			},
 			onLoad: () => {
 				deckAdded = true;
+				// createMapBox();
 				loadChunks();
+				mapBoxVisible = true;
+				createMapBox();
+
 			},
+			onResize: ((size) => {
+				console.log("reszing",size)
+			}),
+			// onInteractionStateChange: ((e) => {
+			// 	console.log(e)
+			// }),
 			onViewStateChange: ({viewState}) => {
 				// currentViewState = deckgl.viewState;
 				// console.log(viewState,currentViewState)
@@ -1124,8 +1282,17 @@
 				let viewport = new OrthographicView().makeViewport({width,height,viewState});
 				updateScreenCoordinates(viewport);
 
+				// console.log(viewState)
+
+				// console.log(viewState)
+
+				
+				// return ;
+
 				//do i need this???
-				// deckgl.setProps({viewState});
+				deckgl.setProps({
+					viewState: applyViewStateConstraints(viewState)
+				});
   			},
 			controller: true,
 			layers: layers
@@ -1146,6 +1313,20 @@
 						zoom: 1,
 						controller: true,
 						layers: layers,
+					},
+				});
+			}
+			else if (mapBoxVisible){
+				console.log("resetting zoom");
+
+				deckgl.setProps({
+					views: new OrthographicView(),
+					viewState: {
+				 		target: [Math.floor(viewportWidth/sizesFiltered.size*(sizes.size)/2)-2, 0, 0],
+						zoom: zoomLevel,
+						controller: true,
+						transitionDuration: 0,
+						// layers:layers,
 					},
 				});
 			}
@@ -1253,6 +1434,9 @@
 
 
 	function sortImages(locationData,colorData){
+
+		console.log(locationData)
+
 
 		return new Promise((resolve, reject) => {
 			if(locationData){
@@ -1445,7 +1629,7 @@
 {/if}
 
 {#if waiting}
-	<div class="waiting"
+	<div class="waiting {mapBoxZoom > 10 && mapBoxVisible ? 'shift-up' : ''}" class:mapBoxVisible
 		transition:fade={{duration:500}}
 	>
 		<p class="every every-small">
@@ -1489,6 +1673,9 @@
 	</div>
 	
 	<div class="settings">
+
+		
+
 		<div bind:this={inputBox} id="geocoder" class="geocoder">
 			{#if locationQueried}
 				<div class="location-queried">
@@ -1506,6 +1693,8 @@
 		<div class="bottom">
 			{#if keyboardControls}
 				<div class="zoom">
+					
+
 					<button
 						on:click={() => handleZoomClick("in")}
 					>zoom in
@@ -1517,6 +1706,8 @@
 					</button>
 				</div>
 			{/if}
+
+
 	
 			<div class="color-finder">
 				<span>Court Color</span>
@@ -1572,7 +1763,10 @@
 	</div>
 </div>
 
-<div style="" class="el" class:showEl bind:this={el}>
+<div class="el {mapBoxZoom > 10 && mapBoxVisible ? 'showDeck' : ''} {mapBoxVisible ? 'shrunk' : ''}" class:showEl bind:this={el}>
+</div>
+
+<div id="mapbox-map-container" class:mapBoxVisible>
 </div>
 
 <div class="favorite-text" class:favoriteActive>
@@ -1626,6 +1820,26 @@
 
 
 <style>
+	#mapbox-map-container {
+		position: absolute;
+		height: 100%;
+		width: 100%;
+		top: 0;
+		left: 0;
+		right: 0;
+		margin: 0 auto;
+		pointer-events: none;
+	}
+
+	#mapbox-map-container.mapBoxVisible {
+		pointer-events: all;
+	}
+
+
+
+
+	
+
 	.screen-coord {
 		position: absolute;
 	}
@@ -1905,6 +2119,24 @@
 		display: block;
 	}
 
+	.el.shrunk {
+		height: 200px;
+		left: 0;
+		right: 0;
+		top: auto;
+		bottom: 0;
+		transform: translate(0,100%);
+		transition: transform .5s;
+		z-index: 10000;
+		background-color: rgba(0,0,0,.9);
+	}
+
+	.el.shrunk.showDeck {
+		transform: translate(0,0%);
+	}
+
+
+
 	.settings {
 		display: flex;
 		pointer-events: none;
@@ -2157,6 +2389,19 @@
 		pointer-events: none;
 		cursor: help;
 		pointer-events: all;
+	}
+
+	.waiting.mapBoxVisible {
+		height: 200px;
+		bottom: 0;
+		top: auto;
+		transform: translate(0,100%);
+		opacity: 1;
+		transition: translate .5s
+	}
+
+	.waiting.mapBoxVisible.shift-up {
+		transform: translate(0,0);
 	}
 
 	.waiting .every {

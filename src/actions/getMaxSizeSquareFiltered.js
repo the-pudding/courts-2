@@ -9,7 +9,11 @@ let getMaxSizeOfSquaresInRect = function(n,w,h) {
     return Math.max(sw,sh);
 }
 
-export default function calcSquareSizeFiltered(width,height,cardsNeeded,max) {
+export default function calcSquareSizeFiltered(width,height,cardsNeeded,max,mapboxVisible) {
+
+    if(mapboxVisible){
+        return {rowSize:10000,size:175}
+    }
 
     let size;
     let availableWidth = width;
@@ -26,6 +30,8 @@ export default function calcSquareSizeFiltered(width,height,cardsNeeded,max) {
 
     let rowSize = Math.floor(availableWidth/size);
     
+    
+
     return {rowSize:rowSize,size:size}
 }
 
