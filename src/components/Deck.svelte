@@ -269,8 +269,12 @@
 				});
 			}
 			else {
-						
-				triggerMapboxDeckCourtsBasedOnMapboxBounds();
+				waiting = true;
+	
+				setTimeout(() => {
+					triggerMapboxDeckCourtsBasedOnMapboxBounds();
+				},1000)
+				
 
 				deckgl.setProps({
 					controller: {
@@ -768,37 +772,24 @@
 			zoomTo(zooming,false);
 		}
 
-		await makeTileLayer();
-		await loadText();
-		await loadTestIconAtlas();
-
-
-		deckgl.setProps({
-			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
-		});
+		let timeoutTime = 1500;
+		if(mapBoxVisible){
+			timeoutTime = 100;
+		}
 
 		setTimeout(async() => {
-		// 	if(!mapBoxVisible){
-		// 		await loadTestIconAtlas();
-		// 		await loadText();
-		// 	}
 
-		// 	await makeTileLayer();
+			await makeTileLayer();
+			await loadText();
+			await loadTestIconAtlas();
 
-		// 	let layersToMake = [firstTileLayer];
-		// 	if(!mapBoxVisible){
-		// 		layersToMake = [firstTileLayer,iconAtlasLayer,textLayer];
-		// 	}
-			
-		// 	deckgl.setProps({
-		// 		layers: layers.concat(layersToMake),
-		// 	});
+			deckgl.setProps({
+				layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
+			});
 
 			waiting = false;
-		// 	// changeWaiting(waiting);
-
 			
-		},100)
+		}, timeoutTime)
 	}
 
 	async function handleStartButtonClick() {
@@ -2269,7 +2260,7 @@
 		top: 0;
 		left: 0;
 		width: 100vw;
-        z-index: 1000;
+        z-index: 1000000;
 	}
 
 	.overlay-test {
