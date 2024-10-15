@@ -16,7 +16,7 @@
     <p>By <a target="_blank" href="https://pudding.cool/author/matt-daniels/">Matthew Daniels</a>, for visual journalism publication <a href="https://pudding.cool/">The Pudding</a>.</p>
     <p>Reach out at matt@pudding.cool</p>
     <p>Court Locations via <a href="https://www.openstreetmap.org/#map=4/38.01/-95.84">Open Street Map</a>. Satellite imagery via Google. Notable prior art in satellite imagery: Joshua Begley&rsquo;s <a href='https://www.studioptcd.com/reference-projects/prison-map' target='_blank'>Prison Map</a> (currently offline), <a href='https://theintercept.co/officer-involved/' target='_blank'>Officer Involved</a>, and <a href='https://projects.theintercept.com/fatal-migrations/' target='_blank'>Fatal Migrations</a>, as well as Jenny Odell&rsquo;s <a href='https://www.jennyodell.com/satellite.html' target='_blank'>Satellite Collections</a>.</p>
-    <p>If you like this project, consider supporting <a href="https://www.instagram.com/project_backboard/" target="_blank">Project Backboard</a>, a non-profit that painted/renovated many of the courts seen in the satellite imagery.</p>
+    <p style="margin-bottom:0;">If you like this project, consider supporting <a href="https://www.instagram.com/project_backboard/" target="_blank">Project Backboard</a>, a non-profit that painted/renovated many of the courts seen in the satellite imagery.</p>
 </div>
 
 <style>
@@ -33,7 +33,8 @@
         max-width: 400px;
         padding: 1rem;
         transform: translate(0,-50%);
-        padding: 0.35em 0.75em 0.625em;
+        padding: 15px 20px;
+        max-width: calc(100% - 20px);
     }
 
     .about p {
@@ -54,5 +55,6 @@
         color: black;
         margin-inline-start: auto;
         display: block;
+        transform: translate(5px,0);
     }
 </style>

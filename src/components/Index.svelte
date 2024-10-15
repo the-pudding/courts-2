@@ -2,6 +2,7 @@
 	import { getContext, onMount } from "svelte";
 	import viewport from "$stores/viewport.js";
 	import DeckComponent from "$components/Deck.svelte"
+	// import Demo from "$components/demo/Demo.svelte"
 	let el;
 	let mounted;
 	$:console.log($viewport)
@@ -14,6 +15,7 @@
 
 
 {#if mounted && $viewport}
+	<!-- <Demo /> -->
 	<DeckComponent viewportWidth={$viewport.width} viewportHeight={$viewport.height}/>
 {/if}
 

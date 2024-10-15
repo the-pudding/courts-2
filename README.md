@@ -1,7 +1,7 @@
 To do:
-
-
-
+- color blocking in mapview
+- fix base layers with polygons getting dropped
+- dots should be clickable?
 
 *SPEED
 Remove so many images from loading in tilelayer

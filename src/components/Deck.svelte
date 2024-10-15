@@ -13,6 +13,9 @@
 	import calcSquareSizeFiltered from "$actions/getMaxSizeSquareFiltered.js"
 	import Mark from "$svg/mark.svg";
 	import About from "$components/About.svelte"
+	import locate from "$utils/locate.js"
+	import Toggle from "$components/helpers/Toggle.svelte";
+
 
 	import mapboxgl from "mapbox-gl";
 	import "mapbox-gl/dist/mapbox-gl.css";
@@ -44,6 +47,8 @@
 	} from '@loaders.gl/textures';
 	import viewport from "../stores/viewport";
 	
+
+	let valueInner = "grid";
 	let skipIntro = true;
 	let showEl = true;
 	let locationQueried = false;
@@ -59,6 +64,10 @@
 	let show3D = false;
 	let toolbarVisibility = true;
 	let hoverable = false;
+	let courtCount = 0;
+	let locationQueriedBBox = null;
+
+	let mapboxFinished = false;
 
 	let mapBoxVisible = false;
 
@@ -121,7 +130,7 @@
 	let spriteMap = {};
 	let supaBaseData;
 	let geoCoderAdded;
-	let states = [0]//,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+	let states = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 	let layerProps = [];
 	let layers = [];
 	let bitmapSublayers = [];
@@ -131,26 +140,117 @@
 	let courtsWithFavorites = {}
 	let courtsWithComments = {};
 
+	let userInputFaveCourts = [];
+
 	let courtsFaveCount = [0];
 	let mapBoxMap;
 
 	let moveEndTimeout;
 
-
-	$: console.log(zoom)
-
 	$: if(mobile && zoom > mobileMin){
 		showTextLayer();
-	};
+	};	
+
+	$: console.log(valueInner,"value inner")
+
+	$: valueInner, toggleMapbox();
+
+
+
+
+	async function triggerMapboxDeckCourtsBasedOnMapboxBounds(){
+		let bounds = mapBoxMap.getBounds();
+		let locationData = {result:{bbox:[bounds["_sw"].lng,bounds["_sw"].lat,bounds["_ne"].lng, bounds["_ne"].lat]}};		
+		
+		if(mapBoxVisible){
+			if(mapBoxZoom > 10){
+				await sortImages(locationData,false);
+				rebuildGrid();
+			}
+		}
+		else {
+			await sortImages(locationData,false);
+			rebuildGrid();
+		}
+	}
+
+	async function triggerMapboxDeckCourtsBasedOnSearchBBox(){
+
+		let locationData = {result:{bbox:locationQueriedBBox}};		
+
+		if(mapBoxZoom > 10){
+			await sortImages(locationData,false);
+			rebuildGrid();
+		}
+
+	}
+
+	async function toggleMapbox(){
+		targetDeck = null;
+		locationQueried = null;
+
+		if(deckAdded) {
+		
+			if(!mapboxFinished && valueInner == "map"){
+				mapBoxVisible = true;
+				createMapBox();
+			}
+			else if(valueInner == "map"){
+				mapBoxVisible = true;
+
+				if(locationQueriedBBox){
+					mapBoxMap.fitBounds(locationQueriedBBox, {animate:false});
+					triggerMapboxDeckCourtsBasedOnSearchBBox();
+				}
+				else {
+					triggerMapboxDeckCourtsBasedOnMapboxBounds();
+				}
+			}
+			else {
+				mapBoxVisible = false;
+			}
+
+			if(mapBoxVisible){
+
+				deckgl.setProps({
+					controller: {
+						scrollZoom: false,
+						dragPan: true,
+						touchZoom: false,
+						doubleClickZoom: false,
+						touchRotate:false,
+						dragRotate: false,
+					}
+				});
+			}
+			else {
+						
+				triggerMapboxDeckCourtsBasedOnMapboxBounds();
+
+				deckgl.setProps({
+					controller: {
+						scrollZoom: true,
+						dragPan: true,
+						touchZoom: true,
+						doubleClickZoom: false,
+						touchRotate:false,
+						dragRotate: false,
+					}
+				});
+			}
+		}
+	}
 
 	async function createMapBox(){
 
-		// await makeTileLayer();
+		let test = true;
+		let locationData = await locate(test);
 
-		// let layersToMake = [firstTileLayer];		
-		// deckgl.setProps({
-		// 	layers: layers.concat(layersToMake),
-		// });
+		console.log(locationData,"location")
+		let center = [-74, 40.7];
+		if(locationData){
+			center = locationData.loc.split(",").reverse();
+		}
 
 
 		mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN_DEV;
@@ -159,57 +259,46 @@
 			container: "mapbox-map-container",
 			interactive: true,
 			style: 'mapbox://styles/dock4242/cm1p1kdvj00d501pd7l4g1dc5', // style URL
-	        center: [-74, 40.7], // starting position [lng, lat]
+	        center: center, // starting position [lng, lat]
     	    zoom: 9 // starting zoom
 		});
 		
 		mapBoxMap.on('zoom', async() => {
 			mapBoxZoom = mapBoxMap.getZoom();
+			console.log(mapBoxZoom)
 		})
 
 		mapBoxMap.on('movestart', () => {
 			waiting = true;
+
+			//this allows the tilelayer to reset the boxes to the starter position
+			targetDeck = null;
 		})
 
-
 		mapBoxMap.on('moveend', async() => {
+
+			console.log("moving")
+
+			locationQueriedBBox = null;
+
     		if(moveEndTimeout){
-				console.log("clearing timeout")
 				clearTimeout(moveEndTimeout);
 			}
 
 			moveEndTimeout = setTimeout(async() => {
-				console.log("timeout triggered")
-
-				let bounds = mapBoxMap.getBounds();
-				let locationData = {result:{bbox:[bounds["_sw"].lng,bounds["_sw"].lat,bounds["_ne"].lng, bounds["_ne"].lat]}};
-				
-				
-				if(mapBoxZoom > 10){
-					await sortImages(locationData,false);
-					console.log(spritePositionsMaster.length)
-					rebuildGrid();
-				}
-				
-				
-			
+				triggerMapboxDeckCourtsBasedOnMapboxBounds();
 			},2000)
 		});
 
+		mapBoxMap.on('load', async() => {
+			mapboxFinished = true;
+			if(locationQueriedBBox){
+				mapBoxMap.fitBounds(locationQueriedBBox, {animate:false});
+				triggerMapboxDeckCourtsBasedOnSearchBBox();
+			}
+		})
+
 		spritePositionsMaster = await makeMasterData([],courtData);
-		// rebuildGrid();
-
-		deckgl.setProps({
-	  		controller: {
-    			scrollZoom: false,  // Disable zoom on scroll/two-finger swipe
-    			dragPan: true,
-				touchZoom: false,
-				doubleClickZoom: false,
-				touchRotate:false,
-				dragRotate: false,
-      		}
-		});
-
 	}
 
 	
@@ -235,8 +324,6 @@
 				// changeWaiting(waiting);
 
 			},500)
-
-			console.log("show text layer",zoom,mobileMin);
 		}
 	}
 
@@ -266,6 +353,9 @@
 		sizesFiltered = calcSquareSizeFiltered(width,height,spritePositionsMaster.length,10,mapBoxVisible);
 
 		let squareSize = sizesFiltered.rowSize;
+		if(mapBoxVisible){
+			squareSize = 10000;
+		}
 
 		spritePositionsMaster = spritePositionsMaster.map((d,i) => {
 
@@ -326,7 +416,6 @@
 				d.coordinates = [x,y];
 			})
 
-			// console.log(spritePositionsMaster.slice(0,10))
 		}
 		
 
@@ -490,7 +579,7 @@
 
 		return new Promise(async (resolve, reject) => {
 
-			console.log(textData,textVisibility);
+			
 
 			let props = {
 				data: textData,
@@ -527,32 +616,6 @@
 			})
 			resolve();
 		})
-	}
-
-	async function changeWaiting(setting){
-		console.log(waiting)
-		if(!setting){
-			console.log("turningon")
-			deckgl.setProps({
-				controller: {
-					scrollZoom: true,
-					dragPan: true,
-					dragRotate: true,  // Rotation enabled by default
-					touchRotate: true
-				}
-      		});
-		} else {
-
-			console.log("turningOff")
-			deckgl.setProps({
-				controller: {
-					scrollZoom: false,
-					dragPan: false,
-					dragRotate: false,  // Rotation enabled by default
-					touchRotate: false
-				}
-      		});
-		}
 	}
 
 	async function fullGrid(){
@@ -630,7 +693,7 @@
 			zoomTo(zooming-.2,false);
 		}
 		else if(mapBoxVisible) {
-			zooming = Math.log2(sizesFiltered.size / sizes.size);
+			zooming = Math.log2(175 / sizes.size);
 			zoomTo(zooming,false);
 		}
 
@@ -702,22 +765,23 @@
 			layers: layers
 		});
       }
-	//   await makeTileLayer();
+
+	  await makeTileLayer();
 
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	//   await loadTestIconAtlas();
-	//   textData = await makeTextData();
-	//   await loadText();
+	  await loadTestIconAtlas();
+	  textData = await makeTextData();
+	  await loadText();
 
-	//   deckgl.setProps({
-	//   	layers: layers.concat([
-	// 		firstTileLayer,
-	// 		iconAtlasLayer,
-	// 		textLayer
-	// 	])
-	//   });
+	  deckgl.setProps({
+	  	layers: layers.concat([
+			firstTileLayer,
+			iconAtlasLayer,
+			textLayer
+		])
+	  });
 
     }
 
@@ -745,7 +809,6 @@
 					'useLocalLibraries':true
 				}
 
-				console.log(fetchedChunks)
 
 				await load(`assets/${fetchedChunks}.basis`).then((result) => {
 					console.log("basis loaded ",fetchedChunks)
@@ -818,7 +881,6 @@
 	}
 	
 	async function assignDataToIconLayers(){
-		console.log(layerProps)
 
 		for (let layer in layerProps){
 			let dataTobind = spritePositionsMaster.filter(d => d.geo == states[layer]);
@@ -834,16 +896,20 @@
 		return new Promise(async (resolve, reject) => {
 
 			let tileLayer = new TileLayer({
-				tileSize: 512,
+				tileSize: 256,
 				// minZoom: 5,
 				debounceTime: 100,
 				courtsFaveCount,
 				id:`tileLayer_`,
 				coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
 				onViewportLoad: layers => {
-					console.log(layers,"hi")
 
-					let oldLength = renderedSublayers.length;
+					let oldTile = null;
+					let newTilesLoaded = false;
+					if(renderedSublayers.length > 0){
+						oldTile = renderedSublayers[renderedSublayers.length - 1].id;
+					}
+					
 
 					renderedSublayers = Array.from(layers
 						.flatMap(obj => obj.content ? obj.content : [])
@@ -855,19 +921,50 @@
 						}, new Map())
 						.values())
 						;
-					if(oldLength == 0 && renderedSublayers.length > 0 && targetDeck){
+					
+					if(renderedSublayers.length > 0){
+						console.log(oldTile,renderedSublayers[renderedSublayers.length - 1].id)
+						if(oldTile !== renderedSublayers[renderedSublayers.length - 1].id){
+							newTilesLoaded = true;
+						}
+					}
+					
+
+					let targetDeckTemp;
+
+					if(!targetDeck && mapBoxVisible){
+						targetDeckTemp = [Math.floor(viewportWidth/175*(sizes.size)/2)-2, 0];// [0, 0, 0]
+					}
+					else if (!targetDeck) {
+						targetDeckTemp = [Math.floor(sizesFiltered.rowSize*sizes.size/2), Math.floor(spritePositionsMaster.length/sizesFiltered.rowSize)*sizes.size/2, 0];
+					}
+					else {
+						targetDeckTemp = targetDeck
+					}
+
+					if(renderedSublayers.length > 0){
 
 						const width = viewportWidth; // Width of the viewport
-						const height = viewportHeight; // Height of the viewport
-						const target = [targetDeck[0], targetDeck[1], 0]; // Target point [x, y, z]
-
-						// Calculate the bounds
-						const left = -width / 2;
-						const right = width / 2;
-						const top = height / 2;
-						const bottom = -height / 2;
+						let height = viewportHeight; // Height of the viewport
+						if(mapBoxVisible){
+							height = 200;
+						}
+						const target = [targetDeckTemp[0], targetDeckTemp[1], 0]; // Target point [x, y, z]
+						
+						let left = 0;
+						let right = 0;
+						let top = 0;
+						let bottom = 0;
 
 						// Create the orthographic view
+						let newZoom = Math.log2(sizesFiltered.size / sizes.size);
+						if(mapBoxVisible){
+							newZoom = Math.log2(175/sizes.size);
+						}
+
+						if(newTilesLoaded && !mapBoxVisible){
+							newZoom = zoom
+						}
 						const viewport = new OrthographicViewport({
 							width,
 							height,
@@ -876,10 +973,12 @@
 							top,
 							bottom,
 							target,
-							zoom
+							zoom: newZoom
 						});
 
-						updateScreenCoordinates(viewport);
+						if(mapBoxVisible || !targetDeck || newTilesLoaded){
+							updateScreenCoordinates(viewport);
+						}
 					}
 				},
 				getTileData: async ({id, bbox,signal}) => {
@@ -1003,6 +1102,9 @@
 
 
   	function updateScreenCoordinates(viewport) {
+
+		console.log("updateScreenCoordinates")
+
 		screenCoordinates = renderedSublayers.map(d => {
 			let pos = getScreenCoordinates(d.coordinates,viewport);
 			let width = getScreenCoordinates([sizes.size*2,0],viewport)[0]-getScreenCoordinates([sizes.size,0],viewport)[0];
@@ -1013,8 +1115,6 @@
 				info: d
 			}
 		});
-
-		// console.log(screenCoordinates)
   	}
 
 	async function getData(bbox, id, signal) {
@@ -1083,7 +1183,6 @@
 
 		await new Promise(async(resolve, reject) => {    	
 			supaBaseData = index(await countFaves(), d => d.court_id);
-			console.log(supaBaseData)
 			resolve(supaBaseData);
 		})
 		.then((result) => {						
@@ -1148,9 +1247,12 @@
 				sortValue = null;
 				swatchSet = null;
 
-
+				locationQueriedBBox = e.result.bbox;
 
 				if(!mapBoxVisible){
+
+					targetDeck = null;
+
 					await sortImages(e,false);
 					rebuildGrid();
 					const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
@@ -1159,9 +1261,11 @@
 					}
 
 					locationQueried = e.result.text;
+
+					console.log(locationQueried)
 				}
 				else {
-					mapBoxMap.fitBounds(e.result.bbox)
+					mapBoxMap.fitBounds(locationQueriedBBox)
 				}
 
 			}
@@ -1222,7 +1326,6 @@
 				}
 			},
 			onClick: ({x,y}) => {
-				console.log(x,y)
 
 				let selected = screenCoordinates.filter(d => {
 					let box = [d.screenPosition[0],d.screenPosition[0]+d.screenWidth,d.screenPosition[1], d.screenPosition[1] + d.screenWidth];
@@ -1250,49 +1353,43 @@
 						}
 					}
 					else if (xPercent < .1 && yPercent < .13){
-						threeDId = image.info.id;
-						threeDNode = image.info.latLong;
-						$isThreeD = true;
+						if(mapBoxVisible){
+							mapBoxMap.easeTo({center: image.info.latLong, zoom: 18, duration: 5000});
+						} else {
+							threeDId = image.info.id;
+							threeDNode = image.info.latLong;
+							$isThreeD = true;
+						}
+						
 					}
 				}
 			},
 			onLoad: () => {
 				deckAdded = true;
-				// createMapBox();
 				loadChunks();
-				mapBoxVisible = true;
-				createMapBox();
-
 			},
-			onResize: ((size) => {
-				console.log("reszing",size)
-			}),
-			// onInteractionStateChange: ((e) => {
-			// 	console.log(e)
-			// }),
 			onViewStateChange: ({viewState}) => {
-				// currentViewState = deckgl.viewState;
-				// console.log(viewState,currentViewState)
 				zoom = viewState.zoom;
 				targetDeck = viewState.target;
-				// console.log(viewState);
 
 				let width = viewportWidth;
 				let height = viewportHeight;
+				if(mapBoxVisible){
+					height = 200;
+				}
 				let viewport = new OrthographicView().makeViewport({width,height,viewState});
 				updateScreenCoordinates(viewport);
 
-				// console.log(viewState)
-
-				// console.log(viewState)
-
-				
-				// return ;
-
-				//do i need this???
-				deckgl.setProps({
-					viewState: applyViewStateConstraints(viewState)
-				});
+				if(mapBoxVisible){
+					deckgl.setProps({
+						viewState: applyViewStateConstraints(viewState)
+					});
+				}
+				else {
+					deckgl.setProps({
+						viewState:viewState
+					})
+				}
   			},
 			controller: true,
 			layers: layers
@@ -1304,6 +1401,7 @@
 			console.log("zoomStart")
 			const interpolator = new LinearInterpolator({transitionProps:['zoom','target']});
 			let target = [Math.floor(sizesFiltered.rowSize*sizes.size/2), Math.floor(spritePositionsMaster.length/sizesFiltered.rowSize)*sizes.size/2, 0];
+
 			if(full) {
 
 				deckgl.setProps({
@@ -1322,11 +1420,10 @@
 				deckgl.setProps({
 					views: new OrthographicView(),
 					viewState: {
-				 		target: [Math.floor(viewportWidth/sizesFiltered.size*(sizes.size)/2)-2, 0, 0],
+				 		target: [Math.floor(viewportWidth/175*(sizes.size)/2)-2, 0, 0],
 						zoom: zoomLevel,
 						controller: true,
 						transitionDuration: 0,
-						// layers:layers,
 					},
 				});
 			}
@@ -1350,7 +1447,8 @@
 
 				deckgl.setProps({
 					views: new OrthographicView(),
-					initialViewState: {
+					viewState: {
+					//initialViewState: {
 						target: target,
 						zoom: zoomLevel,
 						controller: true,
@@ -1378,30 +1476,35 @@
 	let heartCoors = [-100,-100];
 
 	async function updateFromHeartClick(id,image,coors){
-		heartCoors = coors;
-		favoritedCourt = `#${formatComma(image.info.court_count)} in ${image.info.location}, ${image.info.state}`
+		if(userInputFaveCourts.indexOf(id) == -1){
 
-		favoriteActive = true;
+			heartCoors = coors;
+			favoritedCourt = `#${formatComma(image.info.court_count)} in ${image.info.location}, ${image.info.state}`
 
-		courtsWithFavorites[id] = (courtsWithFavorites[id] || 0) + 1;
+			favoriteActive = true;
 
-		spritePositionsMaster = await makeMasterData(filteredIds,courtData);
+			courtsWithFavorites[id] = (courtsWithFavorites[id] || 0) + 1;
+			userInputFaveCourts.push(id);
 
-		textData = await makeTextData();
+			spritePositionsMaster = await makeMasterData(filteredIds,courtData);
 
-		courtsFaveCount = [courtsFaveCount[0] + 1];
-		courtsFaveCount = [...courtsFaveCount];
+			textData = await makeTextData();
 
-		await loadText();
-		deckgl.setProps({
-			layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
-		});
+			courtsFaveCount = [courtsFaveCount[0] + 1];
+			courtsFaveCount = [...courtsFaveCount];
 
-		addRow(id);
-		
-		setTimeout(() => {
-			favoriteActive = false;
-		},3000)
+			await loadText();
+			deckgl.setProps({
+				layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
+			});
+
+			addRow(id);
+			
+			setTimeout(() => {
+				favoriteActive = false;
+			},3000)
+
+		}
 	}
 
 	async function updateFromCommentClick(id){
@@ -1435,8 +1538,6 @@
 
 	function sortImages(locationData,colorData){
 
-		console.log(locationData)
-
 
 		return new Promise((resolve, reject) => {
 			if(locationData){
@@ -1456,6 +1557,8 @@
 			}
 
 			spritePositionsMaster = makeMasterData(filteredIds,courtData);
+			courtCount = spritePositionsMaster.length;
+
 			resolve();
 		})
 	}
@@ -1471,6 +1574,7 @@
 		swatchSet = null;
 		geocoder.setInput('');
 		locationQueried = null;
+		locationQueriedBBox = null;
 
 		await sortImages(false,false);
 		fullGrid();
@@ -1485,9 +1589,13 @@
 			updateFromCommentClick(box.id);
 		}
 		else if (button == "mag") {
-			threeDId = box.info.id;
-			threeDNode = box.info.latLong;
-			$isThreeD = true;
+			if(mapBoxVisible){
+				mapBoxMap.easeTo({center: box.info.latLong, zoom: 18, duration: 2000});
+			} else {
+				threeDId = box.info.id;
+				threeDNode = box.info.latLong;
+				$isThreeD = true;
+			}
 		}
 
 	}
@@ -1497,7 +1605,6 @@
 	}
 
 	async function handleZoomClick(dir){
-		console.log(zoom)
 		if(dir == "out"){
 			zoomTo(zoom - 1);
 		}
@@ -1510,6 +1617,7 @@
 		geocoder.setInput('');
 		sortValue = null;
 		locationQueried = null;
+		locationQueriedBBox = null;
 		filteredIds = []
 
 		sortValue = null;
@@ -1531,6 +1639,7 @@
 		sortValue = null;
 		geocoder.setInput('');
 		locationQueried = null;
+		locationQueriedBBox = null;
 
 
 		if(swatchSet !== colorSet){
@@ -1547,7 +1656,6 @@
 
 
 	function handleWorldFinished() {
-		console.log("world finished")
 		showEl = true;
 	}
 
@@ -1674,9 +1782,12 @@
 	
 	<div class="settings">
 
-		
-
 		<div bind:this={inputBox} id="geocoder" class="geocoder">
+			<div class="mapbox-toggle">
+				<Toggle label="Enable" style="inner" bind:value={valueInner} options={[{text:"Show Map",value:"map"},{text:"Hide Map",value:"grid"}]} />
+			</div>
+			
+
 			{#if locationQueried}
 				<div class="location-queried">
 					<button
@@ -1708,37 +1819,38 @@
 			{/if}
 
 
-	
-			<div class="color-finder">
-				<span>Court Color</span>
-				<div class="color-swatches">
-				{#each colors as color, i}
-					<button
-						on:click={() => handleColorClick(color)}
-						class="{color == swatchSet ? 'swatch-selected' : ''}"
-						style="
-							background:{color};
-							border-top-right-radius: {i == colors.length - 1 ? '5px' : ''};
-							border-bottom-right-radius: {i == colors.length - 1 ? '5px' : ''};
-							border-top-left-radius: {i == 0 ? '5px' : ''};
-							border-bottom-left-radius: {i == 0 ? '5px' : ''};
-						"
-					>
-					</button>
-				{/each}
+			{#if !mapBoxVisible}
+				<div class="color-finder">
+					<span>Court Color</span>
+					<div class="color-swatches">
+					{#each colors as color, i}
+						<button
+							on:click={() => handleColorClick(color)}
+							class="{color == swatchSet ? 'swatch-selected' : ''}"
+							style="
+								background:{color};
+								border-top-right-radius: {i == colors.length - 1 ? '5px' : ''};
+								border-bottom-right-radius: {i == colors.length - 1 ? '5px' : ''};
+								border-top-left-radius: {i == 0 ? '5px' : ''};
+								border-bottom-left-radius: {i == 0 ? '5px' : ''};
+							"
+						>
+						</button>
+					{/each}
+					</div>
+					<span class="sorted-by">Sort By</span>
+					<div class=sort-buttons>
+						<button
+							on:click={() => handleSort("heart")}
+						>♡</button>
+						<button
+							on:click={() => handleSort("comment")}
+						>💬</button>
+					</div>
 				</div>
-				<span class="sorted-by">Sort By</span>
-				<div class=sort-buttons>
-					<button
-						on:click={() => handleSort("heart")}
-					>♡</button>
-					<button
-						on:click={() => handleSort("comment")}
-					>💬</button>
-				</div>
-			</div>
-			{#if viewportWidth > 500}
-				<div class="about-keyboard">
+			{/if}			
+			<div class="about-keyboard">
+				{#if viewportWidth > 500 && !mapBoxVisible}
 					<div class="keyboard-controls">
 						<label for="checkbox1"
 							><input
@@ -1749,21 +1861,25 @@
 							/> Keyboard Navigation</label
 						>
 					</div>
-					<div class="about">
-						<button
-							on:click={() => handleAbout()}
-						>About
-				
-						</button>
-					</div>
+				{/if}
+				<div class="about">
+					<button
+						on:click={() => handleAbout()}
+					>About
+			
+					</button>
 				</div>
-			{/if}
+			</div>
 		</div>
 
 	</div>
 </div>
 
-<div class="el {mapBoxZoom > 10 && mapBoxVisible ? 'showDeck' : ''} {mapBoxVisible ? 'shrunk' : ''}" class:showEl bind:this={el}>
+<div class="el {viewportWidth/175 > courtCount ? 'countLow' : ''} {mapBoxZoom > 10 && mapBoxVisible ? 'showDeck' : ''} {mapBoxVisible ? 'shrunk' : ''}" class:showEl bind:this={el}>
+	<div class="count-of-courts">{formatComma(courtCount)} courts found:
+	</div>
+	<!-- <div class="count-of-courts">{formatComma(courtCount)} courts found:
+	</div> -->
 </div>
 
 <div id="mapbox-map-container" class:mapBoxVisible>
@@ -1787,8 +1903,9 @@
 	</div>
 {/if}
 
-{#if screenCoordinates.length > 0 && keyboardControls}
-	<div class="screen-coords">
+{#if screenCoordinates.length > 0}
+<!-- // && keyboardControls} -->
+	<div class="screen-coords {mapBoxVisible ? 'shrunk' : ''}" style="display:{mapBoxZoom < 10 && mapBoxVisible ? 'none' : ''};">
 
 	{#each screenCoordinates as box}
 		<div class="screen-coord" style="left:{box.screenPosition[0]}px; top:{box.screenPosition[1]}px; width:{box.screenWidth}px; height:{box.screenWidth}px;">
@@ -1820,6 +1937,9 @@
 
 
 <style>
+	.mapbox-toggle {
+		margin-right: 20px;
+	}
 	#mapbox-map-container {
 		position: absolute;
 		height: 100%;
@@ -1829,10 +1949,12 @@
 		right: 0;
 		margin: 0 auto;
 		pointer-events: none;
+		visibility: hidden;
 	}
 
 	#mapbox-map-container.mapBoxVisible {
 		pointer-events: all;
+		visibility: visible;
 	}
 
 
@@ -1851,6 +1973,13 @@
 		left: 0;
 		pointer-events: none;
 		overflow: hidden;
+	}
+
+	.screen-coords.shrunk {
+		height: 200px;
+		top: auto;
+		bottom: 0;
+		z-index: 100000;
 	}
 	.screen-coord button {
 		pointer-events: all;
@@ -2098,6 +2227,7 @@
 		margin-right: 1rem;
 		position: relative;
 		touch-action: none;
+		display: flex;
 	}
 	
 
@@ -2129,11 +2259,41 @@
 		transition: transform .5s;
 		z-index: 10000;
 		background-color: rgba(0,0,0,.9);
+		
 	}
 
 	.el.shrunk.showDeck {
 		transform: translate(0,0%);
 	}
+
+	.el.shrunk.showDeck:after {
+		content:'Drag to view courts\A→';
+		position: absolute;
+		width: 150px;
+		right: 0;
+		top: 50%;
+		transform: translate(0,-50%);
+		height: 100%;
+		background: linear-gradient(-90deg, black 20%, rgba(0,0,0,.7) 70%, rgba(0,0,0,0) 100%);
+		color: white;
+		font-size: 24px;
+		pointer-events: none;
+		line-height: 1.2;
+		padding-top: 20px;
+		padding-left: 20px;
+		text-align: right;
+		padding-right: 20px;
+		white-space: pre-wrap;
+		font-family: var(--sans);
+		-webkit-font-smoothing: antialiased;
+  		-moz-osx-font-smoothing: grayscale;
+	}
+
+	.el.shrunk.showDeck.countLow:after {
+		display: none;
+	}
+
+
 
 
 
@@ -2188,10 +2348,10 @@
 
 	.toolbar:before {
 		content: '';
-		height: 50px;
+		height: 80px;
 		position: absolute;
 		width: 100%;
-		background: linear-gradient(180deg, black, rgba(0,0,0,0));
+		background: linear-gradient(180deg, rgba(0,0,0,0.7) 50%, rgba(0, 0, 0, 0) 100%);
 	}
 
 
@@ -2340,6 +2500,10 @@
 		height: 100%;
 	}
 
+	.about button {
+		min-height: 30px;
+	}
+
 	.zoom button {
 		padding: 0rem 1rem;
 		margin-right: 10px;
@@ -2435,9 +2599,11 @@
 	.location-queried {
 		position: absolute;
 		top: 45px;
-		left: 0;
+		left: auto;
+		right: 0;
 		width: 100%;
 		box-shadow: 0 10px 2px rgba(0,0,0,.1);
+		max-width: 240px;
 	}
 
 	.location-queried button {
@@ -2456,6 +2622,27 @@
 	.show-3d-link {
 		top: 3rem;
 		left: 10px;
+	}
+
+	.count-of-courts {
+		position: absolute;
+		top: 0;
+		left: 0;
+		transform: translate(0,-100%);
+		background-color: black;
+		z-index: 100000;
+		color: white;
+		font-family: var(--sans);
+		padding: 5px 10px;
+		font-size: 16px;
+		-webkit-font-smoothing: antialiased;
+  		-moz-osx-font-smoothing: grayscale;
+		display: none;
+		padding-bottom: 0;
+	}
+
+	.shrunk.showDeck .count-of-courts {
+		display: block;
 	}
 
 	.location-queried button svg {

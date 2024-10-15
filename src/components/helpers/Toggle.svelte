@@ -1,4 +1,6 @@
 <script>
+	// import Map from "$svg/map.svg";
+
 	export let label;
 	export let style = "inner";
 	export let options = ["on", "off"];
@@ -17,7 +19,7 @@
 </script>
 
 <div class="toggle toggle--{style}">
-	<span class="label" {id}>{label}</span>
+	<!-- <span class="label" {id}>{label}</span> -->
 	<button
 		role="switch"
 		aria-checked={checked}
@@ -25,7 +27,10 @@
 		on:click={handleClick}
 	>
 		{#if style === "inner"}
-			<span>{options[0].text}</span>
+			<span style="">
+				<!-- {@html Map} -->
+				{options[0].text}
+			</span>
 			<span>{options[1].text}</span>
 		{/if}
 	</button>
@@ -37,31 +42,52 @@
 		font-family: inherit;
 		font-size: 1em;
 	}
+	svg {
+		position: absolute;
+		right: 5px;
+	}
 
 	.toggle--inner [role="switch"][aria-checked="true"] :first-child,
 	[role="switch"][aria-checked="false"] :last-child {
 		display: inline-block;
 		border-radius: 4px;
-		background: var(--color-gray-900);
-		color: var(--color-gray-100);
+		background: white;
+		color: black;
+		font-weight: 600;
+		-webkit-font-smoothing: antialiased;
+  		-moz-osx-font-smoothing: grayscale;
+	}
+
+	.toggle--inner [role="switch"][aria-checked="true"] :first-child,
+	[role="switch"][aria-checked="false"] :last-child svg {
+		stroke: black;
 	}
 
 	.toggle--inner button {
-		padding: 0.5em;
-		background-color: var(--color-white);
-		border: 2px solid var(--color-gray-900);
+		background-color: #292829;
+		color: white;
+		padding: 0;
+		height: 36px;
+		border-radius: 4px;
 	}
 
 	.toggle--inner button span {
 		user-select: none;
 		pointer-events: none;
 		display: inline-block;
-		line-height: 1;
-		padding: 0.25em;
+		line-height: 2;
+		padding: 5px 10px;
+		height: 100%;
+		vertical-align: middle;
+		font-family: var(--sans);
+		color: rgba(255,255,255,0.9);
+		font-size: 12px;
+		letter-spacing: -.2px;
+		position: relative;
 	}
 
 	.toggle--inner button:focus {
-		box-shadow: 0 0 4px 0 var(--color-focus);
+		/* box-shadow: 0 0 4px 0 var(--color-focus); */
 	}
 
 	.toggle--slider {
@@ -70,7 +96,6 @@
 	}
 
 	.toggle--slider button {
-		width: 3.5em;
 		height: 2em;
 		position: relative;
 		margin-left: 0.5em;
@@ -78,7 +103,7 @@
 	}
 
 	.toggle--slider button:focus {
-		box-shadow: 0 0px 4px var(--color-focus);
+		/* box-shadow: 0 0px 4px var(--color-focus); */
 	}
 
 	.toggle--slider button::before {
@@ -101,6 +126,6 @@
 	}
 
 	.toggle--slider button:focus {
-		box-shadow: 0 0 4px 0 var(--color-focus);
+		/* box-shadow: 0 0 4px 0 var(--color-focus); */
 	}
 </style>
