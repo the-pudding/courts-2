@@ -49,6 +49,7 @@
 	
 
 	let valueInner = "grid";
+	let mapPointClicked = false;
 	let skipIntro = true;
 	let showEl = true;
 	let locationQueried = false;
@@ -157,6 +158,45 @@
 
 
 
+	function calculateBoundingBox(lat, lon, distanceM = 500) {
+		const R = 6378137;
+
+		// Convert latitude and longitude to radians
+		const latRad = lat * Math.PI / 180;
+		const lonRad = lon * Math.PI / 180;
+
+		// Angular distance in radians on a great circle
+		const angularDistance = distanceM / (2 * R);
+
+		// Latitude bounds
+		const latMinRad = latRad - angularDistance;
+		const latMaxRad = latRad + angularDistance;
+
+		// Longitude bounds
+		// Compensate for the convergence of meridians
+		const deltaLon = Math.asin(Math.sin(angularDistance) / Math.cos(latRad));
+		const lonMinRad = lonRad - deltaLon;
+		const lonMaxRad = lonRad + deltaLon;
+
+		// Convert back to degrees
+		const latMin = latMinRad * 180 / Math.PI;
+		const latMax = latMaxRad * 180 / Math.PI;
+		const lonMin = lonMinRad * 180 / Math.PI;
+		const lonMax = lonMaxRad * 180 / Math.PI;
+
+		// Return southwest and northeast coordinates
+		return {
+			_sw: {
+				lat: latMin,
+				lng: lonMin
+			},
+			_ne: {
+				lat: latMax,
+				lng: lonMax
+			}
+		};
+	}
+
 
 	async function triggerMapboxDeckCourtsBasedOnMapboxBounds(){
 		let bounds = mapBoxMap.getBounds();
@@ -188,6 +228,11 @@
 	async function toggleMapbox(){
 		targetDeck = null;
 		locationQueried = null;
+		mapPointClicked = false;
+		if(geocoder){
+			geocoder.setInput('');
+		}
+		
 
 		if(deckAdded) {
 		
@@ -275,10 +320,37 @@
 			targetDeck = null;
 		})
 
+		mapBoxMap.on('click', async(e) => {
+
+
+			const features = mapBoxMap.queryRenderedFeatures(e.point);
+			let layers = features.map(d => {
+				return d.layer.id;
+			})
+
+			console.log(layers)
+
+			if(layers.indexOf("circlescourts") > -1 || layers.indexOf("box-fill") > -1){
+				let bounds = calculateBoundingBox(e.lngLat.lat,e.lngLat.lng)
+				// let zoomLevel = 10.1
+				// if(mapBoxZoom > 10.1){
+				// 	zoomLevel = mapBoxZoom;
+				// }
+				// mapBoxMap.jumpTo({
+				// 	center: [e.lngLat.lng,e.lngLat.lat],
+				// 	zoom:zoomLevel
+				// });
+				mapPointClicked = true;
+				let locationData = {result:{bbox:[bounds["_sw"].lng,bounds["_sw"].lat,bounds["_ne"].lng, bounds["_ne"].lat]}};
+				await sortImages(locationData,false);
+				rebuildGrid();
+			}
+		})
+
 		mapBoxMap.on('moveend', async() => {
 
 			console.log("moving")
-
+			mapPointClicked = false
 			locationQueriedBBox = null;
 
     		if(moveEndTimeout){
@@ -1875,7 +1947,7 @@
 	</div>
 </div>
 
-<div class="el {viewportWidth/175 > courtCount ? 'countLow' : ''} {mapBoxZoom > 10 && mapBoxVisible ? 'showDeck' : ''} {mapBoxVisible ? 'shrunk' : ''}" class:showEl bind:this={el}>
+<div class="el {viewportWidth/175 > courtCount ? 'countLow' : ''} {(mapBoxZoom > 10 || mapPointClicked) && mapBoxVisible ? 'showDeck' : ''} {mapBoxVisible ? 'shrunk' : ''}" class:showEl bind:this={el}>
 	<div class="count-of-courts">{formatComma(courtCount)} courts found:
 	</div>
 	<!-- <div class="count-of-courts">{formatComma(courtCount)} courts found:
@@ -1903,27 +1975,28 @@
 	</div>
 {/if}
 
-{#if screenCoordinates.length > 0}
-<!-- // && keyboardControls} -->
-	<div class="screen-coords {mapBoxVisible ? 'shrunk' : ''}" style="display:{mapBoxZoom < 10 && mapBoxVisible ? 'none' : ''};">
+{#if screenCoordinates.length > 0 }
+	{#if keyboardControls}
+		<div class="screen-coords {mapBoxVisible ? 'shrunk' : ''}" style="display:{mapBoxZoom < 10 && mapBoxVisible ? 'none' : ''};">
 
-	{#each screenCoordinates as box}
-		<div class="screen-coord" style="left:{box.screenPosition[0]}px; top:{box.screenPosition[1]}px; width:{box.screenWidth}px; height:{box.screenWidth}px;">
-			<button class="like"
-				on:click={(e) => handleKeyboardButtonPress("like",box,e)}
-			>
-			</button>
-			<button class="comment"
-				on:click={(e) => handleKeyboardButtonPress("comment",box,e)}
-			>
-			</button>
-			<button class="mag"
-				on:click={(e) => handleKeyboardButtonPress("mag",box,e)}
-			>
-			</button>
+		{#each screenCoordinates as box}
+			<div class="screen-coord" style="left:{box.screenPosition[0]}px; top:{box.screenPosition[1]}px; width:{box.screenWidth}px; height:{box.screenWidth}px;">
+				<button class="like"
+					on:click={(e) => handleKeyboardButtonPress("like",box,e)}
+				>
+				</button>
+				<button class="comment"
+					on:click={(e) => handleKeyboardButtonPress("comment",box,e)}
+				>
+				</button>
+				<button class="mag"
+					on:click={(e) => handleKeyboardButtonPress("mag",box,e)}
+				>
+				</button>
+			</div>
+		{/each}
 		</div>
-	{/each}
-	</div>
+	{/if}
 {/if}
 
 {#if mounted && viewportWidth > 500}

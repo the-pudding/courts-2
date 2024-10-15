@@ -30,7 +30,7 @@
         left: 0;
         right: 0;
         margin: 0 auto;
-        max-width: 400px;
+        width: 400px;
         padding: 1rem;
         transform: translate(0,-50%);
         padding: 15px 20px;
