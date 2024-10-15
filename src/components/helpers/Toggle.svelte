@@ -128,4 +128,14 @@
 	.toggle--slider button:focus {
 		/* box-shadow: 0 0 4px 0 var(--color-focus); */
 	}
+
+	@media only screen and (max-width: 500px) {
+		.toggle--inner button span {
+			font-size: 14px;
+			line-height: 1.8;
+		}
+		.toggle--inner button {
+			background-color: black;
+		}
+	}
 </style>

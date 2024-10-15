@@ -50,8 +50,8 @@
 
 	let valueInner = "grid";
 	let mapPointClicked = false;
-	let skipIntro = true;
-	let showEl = true;
+	let skipIntro = false;
+	let showEl = false;
 	let locationQueried = false;
 	let savedData = 0;
 	let keyboardControls = false;
@@ -288,12 +288,12 @@
 
 	async function createMapBox(){
 
-		let test = true;
+		let test = false;
 		let locationData = await locate(test);
 
 		console.log(locationData,"location")
 		let center = [-74, 40.7];
-		if(locationData){
+		if(locationData.loc){
 			center = locationData.loc.split(",").reverse();
 		}
 
@@ -310,7 +310,6 @@
 		
 		mapBoxMap.on('zoom', async() => {
 			mapBoxZoom = mapBoxMap.getZoom();
-			console.log(mapBoxZoom)
 		})
 
 		mapBoxMap.on('movestart', () => {
@@ -1175,8 +1174,6 @@
 
   	function updateScreenCoordinates(viewport) {
 
-		console.log("updateScreenCoordinates")
-
 		screenCoordinates = renderedSublayers.map(d => {
 			let pos = getScreenCoordinates(d.coordinates,viewport);
 			let width = getScreenCoordinates([sizes.size*2,0],viewport)[0]-getScreenCoordinates([sizes.size,0],viewport)[0];
@@ -1502,7 +1499,7 @@
 			else if (mobile){
 				deckgl.setProps({
 					views: new OrthographicView(),
-					initialViewState: {
+					viewState: {
 						target: target,
 						zoom: zoomLevel,
 						controller: true,
@@ -2447,7 +2444,7 @@
 		width: 100%;
 		flex-wrap: wrap;
 		margin: 0;
-		padding: 10px;
+		padding: .5rem;
 		width: fit-content;
 	}
 
@@ -2571,6 +2568,7 @@
 		letter-spacing: .5px;
 		padding: 0 1rem;
 		height: 100%;
+		border-radius: 5px;
 	}
 
 	.about button {
@@ -2757,11 +2755,6 @@
 	}
 
 		
-	@media only screen and (max-width: 640px) {
-		.location-queried {
-			top: 47px;
-		}
-	}
 	@media only screen and (max-width: 900px) {
 		.geocoder {
 			margin-top: 70px;
@@ -2804,6 +2797,26 @@
 	}
 
 	@media only screen and (max-width: 500px) {
+		.location-queried {
+			top: 104px;
+			width: 100%;
+			max-width: none;
+		}
+
+		.bottom {
+			justify-content: flex-end;
+		}
+		.sorted-by, .sort-buttons {
+			display: none;
+		}
+		.about-keyboard {
+			width: 100%;
+			justify-content: flex-end;
+		}
+		.about {
+			margin-left: 0;
+			margin-top: 0;
+		}
 		.three-d {
 			width: 300px;
 			height: 100px;
@@ -2819,14 +2832,21 @@
 		.loading-start .every {
 			margin-bottom: 100px;
 		}
+
+		.mapbox-toggle {
+			margin-right: 0;
+			margin-bottom: 20px;
+		}
 		.geocoder {
 			margin: 0 auto;
-			margin-top: 70px;
+			margin-top: 20px;
+			flex-wrap: wrap;
+			justify-content: flex-end;
 		}
 		.toolbar-logo {
 			margin: 0 auto;
-			left: 0;
-			right: 0;
+			left: 10px;
+			right: auto;
 		}
 		.every-small, .every {
 			background-color: black;
@@ -2834,6 +2854,35 @@
 		.every-small span, .every span {
 			background: none;
 		}
+		.court-finder span {
+			text-align: left;
+		}
+		.color-finder {
+			width: auto;
+		}
+		.el.shrunk.showDeck:after {
+			width: 160px;
+			background: black;
+			height: 17px;
+			top: -6px;
+			font-size: 14px;
+			padding: 4px;
+			content: 'Drag to view courts →' '';
+			padding-bottom: 0;
+			padding-left: 0;
+		}
+		.count-of-courts {
+			font-weight: 600;
+		}
+		.waiting.mapBoxVisible {
+			height: 190px;
+			bottom: 0;
+			top: auto;
+			transform: translate(0,100%);
+			opacity: 1;
+			transition: translate .5s
+		}
+
 	}
 
 </style>
