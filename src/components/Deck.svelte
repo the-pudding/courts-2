@@ -711,33 +711,16 @@
 
 			await loadTestIconAtlas();
 			await loadText();
-
+			await makeTileLayer();
 			// console.log(layers)
 
 			deckgl.setProps({
 				layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer])
 			});
 
-
-			// deckgl.setProps({
-			// 	views: new OrthographicView(),
-			// 	initialViewState: {
-			// 		target: [viewportWidth/2, viewportHeight/2, 0],
-			// 		zoom: 1,
-			// 		controller: true,
-			// 		// layers: layers.concat([firstTileLayer,iconAtlasLayer,textLayer]),
-			// 	}
-			// })
-			
-			if(!sortValue){
-				courtsFaveCount = [courtsFaveCount[0] + 1];
-				courtsFaveCount = [...courtsFaveCount];
-			}
-
 			waiting = false;
-			// changeWaiting(waiting);
 
-		},1000)
+		},2000)
 
 
 	}
@@ -833,17 +816,17 @@
 	  loadingDone = true;
 	  console.log("loading done")
 	  
-	  await loadTestIconAtlas();
-	  textData = await makeTextData();
-	  await loadText();
+	//   await loadTestIconAtlas();
+	//   textData = await makeTextData();
+	//   await loadText();
 
-	  deckgl.setProps({
-	  	layers: layers.concat([
-			firstTileLayer,
-			iconAtlasLayer,
-			textLayer
-		])
-	  });
+	//   deckgl.setProps({
+	//   	layers: layers.concat([
+	// 		firstTileLayer,
+	// 		iconAtlasLayer,
+	// 		textLayer
+	// 	])
+	//   });
 
     }
 
@@ -959,7 +942,7 @@
 
 			let tileLayer = new TileLayer({
 				tileSize: 256,
-				// minZoom: 5,
+				minZoom: 5,
 				debounceTime: 100,
 				courtsFaveCount,
 				id:`tileLayer_`,
@@ -985,7 +968,6 @@
 						;
 					
 					if(renderedSublayers.length > 0){
-						console.log(oldTile,renderedSublayers[renderedSublayers.length - 1].id)
 						if(oldTile !== renderedSublayers[renderedSublayers.length - 1].id){
 							newTilesLoaded = true;
 						}
@@ -1179,7 +1161,6 @@
 
 	async function getData(bbox, id, signal) {
   		// Stall for 20ms - simulate an async request
-		console.log("getting data")
   		await new Promise(resolve => setTimeout(resolve, 100));
 
 		if(!courtData){
@@ -1322,7 +1303,6 @@
 
 					locationQueried = e.result.text;
 
-					console.log(locationQueried)
 				}
 				else {
 					mapBoxMap.fitBounds(locationQueriedBBox)
@@ -1458,24 +1438,25 @@
 
 	function zoomTo(zoomLevel,full){
 		return new Promise((resolve, reject) => {
-			console.log("zoomStart")
 			const interpolator = new LinearInterpolator({transitionProps:['zoom','target']});
 			let target = [Math.floor(sizesFiltered.rowSize*sizes.size/2), Math.floor(spritePositionsMaster.length/sizesFiltered.rowSize)*sizes.size/2, 0];
+
+			console.log(full)
 
 			if(full) {
 
 				deckgl.setProps({
 					views: new OrthographicView(),
-					initialViewState: {
+					viewState: {
 				 		target: [viewportWidth/2, viewportHeight/2, 0],
 						zoom: 1,
 						controller: true,
-						layers: layers,
+						transitionDuration: 0,
+						// layers: layers,
 					},
 				});
 			}
 			else if (mapBoxVisible){
-				console.log("resetting zoom");
 
 				deckgl.setProps({
 					views: new OrthographicView(),
@@ -1494,7 +1475,8 @@
 						target: target,
 						zoom: zoomLevel,
 						controller: true,
-						layers: layers,
+						transitionDuration: 0,
+						// layers: layers,
 					}
 				})
 			}
